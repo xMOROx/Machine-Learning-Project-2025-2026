@@ -1,0 +1,6 @@
+[submodule "how-to-probe"]
+	path = how-to-probe
+	url = https://github.com/sidgairo18/how-to-probe.git
+[submodule "DiET"]
+	path = DiET
+	url = https://github.com/AI4LIFE-GROUP/DiET.git
