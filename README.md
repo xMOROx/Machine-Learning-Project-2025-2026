@@ -60,4 +60,24 @@ pip install torch torchvision torchaudio --extra-index-url https://download.pyto
 
 ### Step 4: Clone Required Project Repositories
 
-This project builds directly on the official code from the authors. We will clone them as sub-modules.
+```bash
+git submodule update --init --recursive
+```
+
+### Step 5: Install Project Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Step 6: Verify Installation
+
+```bash
+python scripts/verify.py
+```
+
+## 4. Data Download
+
+```bash
+bash scripts/download_data.sh
+```
