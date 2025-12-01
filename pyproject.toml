@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Machine Learning Project combining DiET and how-to-probe"
 requires-python = ">=3.10,<3.11"
 dependencies = [
-    # Shared dependencies
     "torch==2.0.1",
     "torchvision==0.15.2",
     "torchaudio==2.0.2",
@@ -16,7 +15,6 @@ dependencies = [
     "scipy==1.11.3",
     "seaborn==0.12.2",
     "opencv-python==4.8.0.74",
-    # how-to-probe specific
     "captum==0.6.0",
     "einops==0.6.1",
     "imageio==2.33.1",
@@ -28,7 +26,6 @@ dependencies = [
     "scikit-image==0.22.0",
     "timm==0.9.7",
     "zennit==0.5.1",
-    # DiET likely needs these (common for saliency/distillation)
     "tqdm",
     "datasets>=4.4.1",
 ]
@@ -40,8 +37,6 @@ dev = [
 ]
 
 [tool.uv]
-# Install mmpretrain from git
-# Note: uv handles git dependencies differently
 find-links = []
 
 [tool.uv.sources]
