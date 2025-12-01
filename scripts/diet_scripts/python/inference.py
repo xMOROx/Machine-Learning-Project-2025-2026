@@ -40,10 +40,18 @@ class DatasetFromDisk(torch.utils.data.Dataset):
 
 
 class DatasetWithPreds(torch.utils.data.Dataset):
+    """Dataset that includes model predictions alongside images and labels.
+    
+    Args:
+        data: List of image paths or tensor of preloaded images
+        labels: List of labels
+        model_preds: Tensor of model predictions
+        load_upfront: Boolean flag to load all images into memory at init time
+    """
     def __init__(self, data, labels, model_preds, load_upfront=False):
         self.data = data
         self.labels = labels
-        self.load_upfront = load_upfront
+        self.load_upfront = load_upfront  # Always a boolean (True or False)
         self.transform = transforms.Compose(
             [
                 transforms.Resize((224, 224)),
@@ -261,6 +269,8 @@ def evaluate_model(model, mask, test_loader, args):
 
 def distill(mask, model, test_loader, mask_opt, args):
     num_rounding_steps = args.rounding_steps
+    # Simplification weight schedule: starts at 1.0 and decreases by 0.9/num_steps each round
+    # This gradually reduces the regularization term encouraging sparsity during optimization
     simp_weight = [
         1 - r * (0.9 / num_rounding_steps) for r in range(num_rounding_steps)
     ]

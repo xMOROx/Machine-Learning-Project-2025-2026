@@ -9,18 +9,20 @@ print_usage() {
     echo "Evaluate model attributions using GridPG or EPG metrics"
     echo ""
     echo "Options:"
-    echo "  --eval-type     Evaluation type: gridpg, epg (required)"
-    echo "  --dataset       Dataset: imagenet, coco, voc (default: imagenet for gridpg, voc for epg)"
-    echo "  --model-path    Path to model checkpoint"
-    echo "  --data-root     Path to dataset root"
-    echo "  --output-dir    Output directory for results"
-    echo "  --grid-size     Grid size for GridPG: 2 or 3 (default: 3)"
-    echo "  --confidence    Confidence threshold for GridPG (default: 0.95)"
-    echo "  -h, --help      Show this help message"
+    echo "  --eval-type       Evaluation type: gridpg, epg (required)"
+    echo "  --dataset         Dataset: imagenet, coco, voc (default: imagenet for gridpg, voc for epg)"
+    echo "  --model-path      Path to model checkpoint"
+    echo "  --model-config    Path to model config (for mmpretrain, optional)"
+    echo "  --data-root       Path to dataset root"
+    echo "  --output-dir      Output directory for results"
+    echo "  --grid-size       Grid size for GridPG: 2 or 3 (default: 3)"
+    echo "  --confidence      Confidence threshold for GridPG (default: 0.95)"
+    echo "  -h, --help        Show this help message"
 }
 
 EVAL_TYPE=""
 DATASET=""
+MODEL_CONFIG=""
 GRID_SIZE=3
 CONFIDENCE=0.95
 
@@ -36,6 +38,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --model-path)
             MODEL_PATH="$2"
+            shift 2
+            ;;
+        --model-config)
+            MODEL_CONFIG="$2"
             shift 2
             ;;
         --data-root)
@@ -102,6 +108,12 @@ fi
 
 ensure_dir "${OUTPUT_DIR}"
 
+# Use MODEL_CONFIG if provided, otherwise fall back to MODEL_PATH
+# This allows using same path for both when they're the same
+if [ -z "${MODEL_CONFIG}" ]; then
+    MODEL_CONFIG="${MODEL_PATH}"
+fi
+
 PYTHON_DIR="$(dirname "${BASH_SOURCE[0]}")/python"
 
 case ${EVAL_TYPE} in
@@ -117,7 +129,7 @@ case ${EVAL_TYPE} in
         
         log_info "Step 1: Getting confident images..."
         python3 "${PYTHON_DIR}/get_confident_images.py" \
-            --model-config "${MODEL_PATH}" \
+            --model-config "${MODEL_CONFIG}" \
             --model-checkpoint "${MODEL_PATH}" \
             --data-file "${DATA_ROOT}/train.txt" \
             --data-root "${DATA_ROOT}" \
@@ -130,13 +142,13 @@ case ${EVAL_TYPE} in
             --output-dir-2x2 "${GRID_DIR_2X2}" \
             --output-dir-3x3 "${GRID_DIR_3X3}"
         
-        # Create file list for grid images
+        # Create file list for grid images (only .png, .jpg, .jpeg files)
         if [ "${GRID_SIZE}" = "2" ]; then
             GRID_DIR="${GRID_DIR_2X2}"
         else
             GRID_DIR="${GRID_DIR_3X3}"
         fi
-        ls "${GRID_DIR}" > "${DATA_FILE}"
+        find "${GRID_DIR}" -maxdepth 1 -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) -printf "%f\n" > "${DATA_FILE}"
         
         log_info "Step 3: Evaluating GridPG metrics..."
         python3 "${PYTHON_DIR}/eval_gridpg.py" \
