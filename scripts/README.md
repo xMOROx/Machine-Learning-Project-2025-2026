@@ -7,6 +7,7 @@ This directory contains scripts for data downloading, model training, and evalua
 ```
 scripts/
 ├── config.sh                 # Shared configuration and utilities
+├── run.sh                    # MAIN: Unified orchestration script
 ├── download_all_data.sh      # Orchestrates all data downloads
 ├── download_diet_data.sh     # Download DiET datasets
 ├── download_htp_data.sh      # Download How-to-Probe datasets
@@ -20,15 +21,79 @@ scripts/
 │   ├── train_baseline.sh     # Train baseline models
 │   ├── distillation.sh       # Run DiET distillation
 │   ├── inference.sh          # Run inference on distilled model
-│   └── evaluate.sh           # Evaluate with metrics
+│   ├── evaluate.sh           # Evaluate with metrics
+│   └── python/               # Python implementations
 └── htp_scripts/              # How-to-Probe specific scripts
     ├── run_pipeline.sh       # Complete HTP pipeline
     ├── pretrain.sh           # SSL pretraining (MoCov2, BYOL, DINO)
     ├── probe.sh              # Train linear/MLP probes
-    └── evaluate.sh           # Evaluate attributions (GridPG, EPG)
+    ├── evaluate.sh           # Evaluate attributions (GridPG, EPG)
+    └── python/               # Python implementations
 ```
 
-## Quick Start
+## Quick Start (Recommended)
+
+Use the unified `run.sh` script:
+
+```bash
+# Download all data
+./scripts/run.sh download --all
+
+# Run DiET pipeline
+./scripts/run.sh diet --dataset mnist --epochs 10
+
+# Run How-to-Probe pipeline
+./scripts/run.sh htp --method dino --backbone resnet50
+
+# Run everything
+./scripts/run.sh all
+
+# Dry run (preview commands)
+./scripts/run.sh diet --dry-run
+```
+
+## Unified Orchestration Script (run.sh)
+
+```bash
+./scripts/run.sh <command> [OPTIONS]
+
+Commands:
+  download    Download datasets
+  diet        Run DiET pipeline
+  htp         Run How-to-Probe pipeline
+  all         Run everything
+
+Download options:
+  --diet      DiET datasets (Colorized MNIST, Chest X-ray, CelebA)
+  --htp       HTP datasets (ImageNet, COCO, VOC)
+  --project   Project datasets (CIFAR-10, SST-2, Adult)
+  --all       All datasets
+
+DiET options:
+  --dataset       mnist, xray, celeba (default: mnist)
+  --epochs        Training epochs (default: 10)
+  --ups           Upsampling factor (default: 4)
+  --lr            Distillation learning rate (default: 2000)
+  --skip-prepare  Skip data preparation
+  --skip-train    Skip baseline training
+  --skip-distill  Skip distillation
+  --skip-eval     Skip evaluation
+
+HTP options:
+  --method        mocov2, byol, dino (default: dino)
+  --backbone      resnet50, bcosresnet50 (default: resnet50)
+  --probe-type    linear, bcos-1, std-2, etc. (default: linear)
+  --skip-pretrain Skip pretraining
+  --skip-probe    Skip probing
+  --skip-eval     Skip evaluation
+
+Common options:
+  --gpu         GPU device ID (default: 0)
+  --gpus        Number of GPUs for distributed (default: 4)
+  --dry-run     Preview commands without executing
+```
+
+## Alternative: Individual Scripts
 
 ### Download Data
 
@@ -78,44 +143,7 @@ Downloads project-specific datasets:
 - `--glue`: GLUE SST-2
 - `--adult`: Adult Census
 
-## Training Scripts
-
-### DiET Pipeline (train_diet.sh)
-
-```bash
-./scripts/train_diet.sh [OPTIONS]
-
-Options:
-  --dataset       Dataset: mnist, xray, celeba (default: mnist)
-  --ups           Upsampling factor (default: 4)
-  --lr            Learning rate for distillation (default: 2000)
-  --epochs        Epochs for baseline training (default: 10)
-  --skip-baseline Skip baseline training
-  --skip-distill  Skip distillation
-  --skip-eval     Skip evaluation
-  --gpu           GPU device ID (default: 0)
-```
-
-### How-to-Probe Pipeline (train_htp.sh)
-
-```bash
-./scripts/train_htp.sh [OPTIONS]
-
-Options:
-  --method        SSL method: mocov2, byol, dino (default: dino)
-  --backbone      Backbone: resnet50, bcosresnet50 (default: resnet50)
-  --probe-types   Probe types (comma-separated, default: linear,bcos-3)
-  --datasets      Datasets for probing (comma-separated, default: imagenet)
-  --loss          Loss function: bce, ce (default: bce)
-  --gpus          Number of GPUs (default: 4)
-  --skip-pretrain Skip pretraining
-  --skip-probing  Skip probing
-  --skip-eval     Skip evaluation
-```
-
-## Individual Scripts
-
-### DiET Scripts
+## DiET Individual Scripts
 
 ```bash
 # Prepare Hard MNIST from Colorized MNIST
@@ -134,7 +162,7 @@ Options:
 ./scripts/diet_scripts/evaluate.sh --dataset mnist --eval-type all
 ```
 
-### How-to-Probe Scripts
+## How-to-Probe Individual Scripts
 
 ```bash
 # Pretrain SSL model
