@@ -2,11 +2,10 @@ import os
 import argparse
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision.datasets import VOCDetection
-from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
+from torchvision.transforms import Compose, Resize, ToTensor
 
 OBJECT_CATEGORIES = [
     "aeroplane",
@@ -243,6 +242,4 @@ def main():
 
 
 if __name__ == "__main__":
-    from PIL import Image
-
     main()

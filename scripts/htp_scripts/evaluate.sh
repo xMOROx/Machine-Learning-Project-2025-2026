@@ -107,27 +107,41 @@ PYTHON_DIR="$(dirname "${BASH_SOURCE[0]}")/python"
 case ${EVAL_TYPE} in
     gridpg)
         CONFIDENT_DIR="${OUTPUT_DIR}/confident_images"
-        GRID_DIR="${OUTPUT_DIR}/grid_pg_images_${GRID_SIZE}x${GRID_SIZE}"
+        GRID_DIR_2X2="${OUTPUT_DIR}/grid_pg_images_2x2"
+        GRID_DIR_3X3="${OUTPUT_DIR}/grid_pg_images_3x3"
+        DATA_FILE="${OUTPUT_DIR}/grid_images_${GRID_SIZE}x${GRID_SIZE}.txt"
         
         ensure_dir "${CONFIDENT_DIR}"
-        ensure_dir "${GRID_DIR}"
+        ensure_dir "${GRID_DIR_2X2}"
+        ensure_dir "${GRID_DIR_3X3}"
         
         log_info "Step 1: Getting confident images..."
         python3 "${PYTHON_DIR}/get_confident_images.py" \
-            --model-path "${MODEL_PATH}" \
+            --model-config "${MODEL_PATH}" \
+            --model-checkpoint "${MODEL_PATH}" \
+            --data-file "${DATA_ROOT}/train.txt" \
             --data-root "${DATA_ROOT}" \
             --output-dir "${CONFIDENT_DIR}" \
             --confidence "${CONFIDENCE}"
         
         log_info "Step 2: Creating GridPG images..."
         python3 "${PYTHON_DIR}/create_grid_dataset.py" \
-            --base-dir "${CONFIDENT_DIR}" \
-            --output-dir "${GRID_DIR}" \
-            --grid-size "${GRID_SIZE}"
+            --input-dir "${CONFIDENT_DIR}" \
+            --output-dir-2x2 "${GRID_DIR_2X2}" \
+            --output-dir-3x3 "${GRID_DIR_3X3}"
+        
+        # Create file list for grid images
+        if [ "${GRID_SIZE}" = "2" ]; then
+            GRID_DIR="${GRID_DIR_2X2}"
+        else
+            GRID_DIR="${GRID_DIR_3X3}"
+        fi
+        ls "${GRID_DIR}" > "${DATA_FILE}"
         
         log_info "Step 3: Evaluating GridPG metrics..."
         python3 "${PYTHON_DIR}/eval_gridpg.py" \
-            --model-path "${MODEL_PATH}" \
+            --model-checkpoint "${MODEL_PATH}" \
+            --data-file "${DATA_FILE}" \
             --data-root "${GRID_DIR}" \
             --output-dir "${OUTPUT_DIR}/results" \
             --map-size "${GRID_SIZE}"
@@ -136,11 +150,16 @@ case ${EVAL_TYPE} in
     epg)
         log_info "Evaluating EPG metrics on ${DATASET}..."
         
+        # Set default year and split for VOC
+        YEAR="${YEAR:-2007}"
+        SPLIT="${SPLIT:-val}"
+        
         python3 "${PYTHON_DIR}/eval_epg.py" \
-            --model-path "${MODEL_PATH}" \
+            --model-checkpoint "${MODEL_PATH}" \
             --data-root "${DATA_ROOT}" \
             --output-dir "${OUTPUT_DIR}" \
-            --dataset "${DATASET}"
+            --year "${YEAR}" \
+            --split "${SPLIT}"
         ;;
     
     *)

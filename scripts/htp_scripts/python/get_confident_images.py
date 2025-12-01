@@ -3,7 +3,7 @@ import argparse
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
+from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor
 from PIL import Image
 
 

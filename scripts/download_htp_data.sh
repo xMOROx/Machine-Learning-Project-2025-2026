@@ -103,13 +103,13 @@ download_coco() {
     ensure_dir "${COCO_DIR}/annotations"
     
     log_info "Downloading COCO train2014..."
-    wget -c http://images.cocodataset.org/zips/train2014.zip -P "${COCO_DIR}"
+    wget -c https://images.cocodataset.org/zips/train2014.zip -P "${COCO_DIR}"
     
     log_info "Downloading COCO val2014..."
-    wget -c http://images.cocodataset.org/zips/val2014.zip -P "${COCO_DIR}"
+    wget -c https://images.cocodataset.org/zips/val2014.zip -P "${COCO_DIR}"
     
     log_info "Downloading COCO annotations..."
-    wget -c http://images.cocodataset.org/annotations/annotations_trainval2014.zip -P "${COCO_DIR}"
+    wget -c https://images.cocodataset.org/annotations/annotations_trainval2014.zip -P "${COCO_DIR}"
     
     log_info "Extracting archives..."
     unzip -q "${COCO_DIR}/train2014.zip" -d "${COCO_DIR}"
@@ -134,11 +134,11 @@ download_voc() {
     ensure_dir "${VOC_DIR}"
     
     log_info "Downloading VOC2007..."
-    wget -c http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar -P "${VOC_DIR}"
-    wget -c http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar -P "${VOC_DIR}"
+    wget -c https://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar -P "${VOC_DIR}"
+    wget -c https://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar -P "${VOC_DIR}"
     
     log_info "Downloading VOC2012..."
-    wget -c http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar -P "${VOC_DIR}"
+    wget -c https://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar -P "${VOC_DIR}"
     
     log_info "Extracting archives..."
     tar -xf "${VOC_DIR}/VOCtrainval_06-Nov-2007.tar" -C "${VOC_DIR}"

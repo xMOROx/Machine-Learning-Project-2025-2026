@@ -41,12 +41,14 @@ print_usage() {
     echo "Common options:"
     echo "  --gpu             GPU device ID (default: 0)"
     echo "  --gpus            Number of GPUs for distributed training (default: 4)"
+    echo "  --low-vram        Use low VRAM settings for small laptops"
     echo "  --dry-run         Print commands without executing"
     echo "  -h, --help        Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0 download --all"
     echo "  $0 diet --dataset mnist --epochs 10"
+    echo "  $0 diet --dataset mnist --low-vram   # For small GPUs"
     echo "  $0 htp --method dino --backbone resnet50"
     echo "  $0 all --gpu 0"
 }
@@ -65,6 +67,7 @@ PROBE_TYPE="linear"
 GPU=0
 GPUS=4
 DRY_RUN=false
+LOW_VRAM=false
 SKIP_PREPARE=false
 SKIP_TRAIN=false
 SKIP_DISTILL=false
@@ -138,6 +141,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dry-run)
             DRY_RUN=true
+            shift
+            ;;
+        --low-vram)
+            LOW_VRAM=true
+            export LOW_VRAM=true
             shift
             ;;
         --skip-prepare)
@@ -217,6 +225,12 @@ cmd_diet() {
     log_info "Upsampling: ${UPS}"
     log_info "Learning rate: ${LR}"
     log_info "GPU: ${GPU}"
+    if [ "${LOW_VRAM}" = true ]; then
+        log_info "Low VRAM mode: enabled"
+        LOW_VRAM_FLAG="--low-vram"
+    else
+        LOW_VRAM_FLAG=""
+    fi
     
     if [ "${SKIP_PREPARE}" = false ] && [ "${DATASET}" = "mnist" ]; then
         log_info "Step 1: Preparing Hard MNIST..."
@@ -228,7 +242,8 @@ cmd_diet() {
         run_cmd "${SCRIPT_DIR}/diet_scripts/train_baseline.sh" \
             --dataset "${DATASET}" \
             --epochs "${EPOCHS}" \
-            --gpu "${GPU}"
+            --gpu "${GPU}" \
+            ${LOW_VRAM_FLAG}
     fi
     
     if [ "${SKIP_DISTILL}" = false ]; then
@@ -237,13 +252,15 @@ cmd_diet() {
             --dataset "${DATASET}" \
             --ups "${UPS}" \
             --lr "${LR}" \
-            --gpu "${GPU}"
+            --gpu "${GPU}" \
+            ${LOW_VRAM_FLAG}
         
         log_info "Step 4: Running inference..."
         run_cmd "${SCRIPT_DIR}/diet_scripts/inference.sh" \
             --dataset "${DATASET}" \
             --ups "${UPS}" \
-            --gpu "${GPU}"
+            --gpu "${GPU}" \
+            ${LOW_VRAM_FLAG}
     fi
     
     if [ "${SKIP_EVAL}" = false ]; then
@@ -252,7 +269,8 @@ cmd_diet() {
             --dataset "${DATASET}" \
             --ups "${UPS}" \
             --eval-type all \
-            --gpu "${GPU}"
+            --gpu "${GPU}" \
+            ${LOW_VRAM_FLAG}
     fi
     
     log_success "DiET pipeline completed"
@@ -299,6 +317,7 @@ cmd_all() {
     
     DOWNLOAD_DIET=true
     DOWNLOAD_HTP=true
+    DOWNLOAD_PROJECT=true
     cmd_download
     
     cmd_diet

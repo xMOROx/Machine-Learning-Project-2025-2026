@@ -11,17 +11,18 @@ print_usage() {
     echo "Options:"
     echo "  --dataset     Dataset to train on: mnist, xray, celeba (default: mnist)"
     echo "  --epochs      Number of training epochs (default: 10)"
-    echo "  --batch-size  Batch size (default: 64)"
+    echo "  --batch-size  Batch size (default: ${DEFAULT_BATCH_SIZE})"
     echo "  --lr          Learning rate (default: 0.001)"
     echo "  --data-dir    Custom data directory"
     echo "  --output-dir  Custom output directory"
     echo "  --gpu         GPU device ID (default: 0)"
+    echo "  --low-vram    Use low VRAM settings for small GPUs"
     echo "  -h, --help    Show this help message"
 }
 
 DATASET="mnist"
 EPOCHS=10
-BATCH_SIZE=64
+BATCH_SIZE="${DEFAULT_BATCH_SIZE}"
 LR=0.001
 GPU=0
 
@@ -54,6 +55,11 @@ while [[ $# -gt 0 ]]; do
         --gpu)
             GPU="$2"
             shift 2
+            ;;
+        --low-vram)
+            BATCH_SIZE=16
+            export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+            shift
             ;;
         -h|--help)
             print_usage
