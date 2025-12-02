@@ -17,15 +17,13 @@ LOW_VRAM="${LOW_VRAM:-false}"
 
 # Default batch sizes (adjusted if LOW_VRAM=true)
 if [ "${LOW_VRAM}" = "true" ]; then
-    DEFAULT_BATCH_SIZE=16
-    DEFAULT_EVAL_BATCH_SIZE=8
-    DEFAULT_GPUS=1
-    # Enable memory efficient options
-    export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+  DEFAULT_BATCH_SIZE=16
+  DEFAULT_EVAL_BATCH_SIZE=8
+  DEFAULT_GPUS=1
 else
-    DEFAULT_BATCH_SIZE=64
-    DEFAULT_EVAL_BATCH_SIZE=64
-    DEFAULT_GPUS=4
+  DEFAULT_BATCH_SIZE=64
+  DEFAULT_EVAL_BATCH_SIZE=64
+  DEFAULT_GPUS=4
 fi
 
 GREEN='\033[0;32m'
@@ -35,32 +33,32 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${CYAN}[INFO]${NC} $1"
+  echo -e "${CYAN}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+  echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+  echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+  echo -e "${RED}[ERROR]${NC} $1"
 }
 
 ensure_dir() {
-    if [ ! -d "$1" ]; then
-        mkdir -p "$1"
-        log_info "Created directory: $1"
-    fi
+  if [ ! -d "$1" ]; then
+    mkdir -p "$1"
+    log_info "Created directory: $1"
+  fi
 }
 
 check_command() {
-    if ! command -v "$1" &> /dev/null; then
-        log_error "$1 is required but not installed."
-        return 1
-    fi
-    return 0
+  if ! command -v "$1" &>/dev/null; then
+    log_error "$1 is required but not installed."
+    return 1
+  fi
+  return 0
 }

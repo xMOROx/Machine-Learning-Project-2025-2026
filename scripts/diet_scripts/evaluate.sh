@@ -70,7 +70,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --low-vram)
             BATCH_SIZE=8
-            export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
             shift
             ;;
         -h|--help)
