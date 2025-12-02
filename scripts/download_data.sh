@@ -11,7 +11,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 RED='\033[0;31m'
-NC='\033[0m' 
+NC='\033[0m'
 
 set -e
 
@@ -21,7 +21,8 @@ echo -e "${YELLOW}Downloading all datasets to directory: ${CYAN}$DATA_ROOT${NC}"
 echo -e "${YELLOW}============================================================${NC}"
 
 echo -e "\n${YELLOW}[1/4] Downloading CIFAR-10 (for CNN)...${NC}"
-PYTHON_CIFAR_TEMPLATE=$(cat << END_OF_SCRIPT
+PYTHON_CIFAR_TEMPLATE=$(
+  cat <<END_OF_SCRIPT
 import torchvision
 import os
 path = os.path.join('$DATA_ROOT', 'cifar10')
@@ -38,7 +39,8 @@ END_OF_SCRIPT
 python3 -c "$PYTHON_CIFAR_TEMPLATE"
 
 echo -e "\n${YELLOW}[2/4] Downloading GLUE SST-2 (for BERT)...${NC}"
-PYTHON_GLUE_TEMPLATE=$(cat << END_OF_SCRIPT
+PYTHON_GLUE_TEMPLATE=$(
+  cat <<END_OF_SCRIPT
 from datasets import load_dataset
 import os
 path = os.path.join('$DATA_ROOT', 'glue_sst2')
@@ -59,11 +61,11 @@ COLOR_MNIST_DIR="$DATA_ROOT/colorized-MNIST"
 COLOR_MNIST_REPO="https://github.com/jayaneetha/colorized-MNIST.git"
 
 if [ -d "$COLOR_MNIST_DIR" ]; then
-    echo -e "${YELLOW}Directory ${CYAN}$COLOR_MNIST_DIR${YELLOW} already exists, skipping clone.${NC}"
+  echo -e "${YELLOW}Directory ${CYAN}$COLOR_MNIST_DIR${YELLOW} already exists, skipping clone.${NC}"
 else
-    echo -e "Cloning repository ${CYAN}$COLOR_MNIST_REPO${NC} into ${CYAN}$COLOR_MNIST_DIR${NC}..."
-    git clone $COLOR_MNIST_REPO $COLOR_MNIST_DIR
-    echo -e "${GREEN}Colorized MNIST repository cloned successfully.${NC}"
+  echo -e "Cloning repository ${CYAN}$COLOR_MNIST_REPO${NC} into ${CYAN}$COLOR_MNIST_DIR${NC}..."
+  git clone $COLOR_MNIST_REPO $COLOR_MNIST_DIR
+  echo -e "${GREEN}Colorized MNIST repository cloned successfully.${NC}"
 fi
 
 echo -e "\n${YELLOW}[4/4] Downloading Adult (Census Income) (for Random Forest/LGBM)...${NC}"
@@ -73,12 +75,12 @@ BASE_URL="https://archive.ics.uci.edu/ml/machine-learning-databases/adult/"
 FILES_ADULT=("adult.data" "adult.test" "adult.names")
 
 for file in "${FILES_ADULT[@]}"; do
-    if [ ! -f "$ADULT_DIR/$file" ]; then
-        echo -e "Downloading ${CYAN}$file${NC}..."
-        curl -sL -o "$ADULT_DIR/$file" "$BASE_URL/$file" || wget -q -O "$ADULT_DIR/$file" "$BASE_URL/$file"
-    else
-        echo -e "${YELLOW}$file already exists, skipping.${NC}"
-    fi
+  if [ ! -f "$ADULT_DIR/$file" ]; then
+    echo -e "Downloading ${CYAN}$file${NC}..."
+    curl -sL -o "$ADULT_DIR/$file" "$BASE_URL/$file" || wget -q -O "$ADULT_DIR/$file" "$BASE_URL/$file"
+  else
+    echo -e "${YELLOW}$file already exists, skipping.${NC}"
+  fi
 done
 echo -e "${GREEN}Adult (Census) download complete.${NC}"
 
@@ -86,3 +88,4 @@ echo -e "\n${GREEN}============================================================$
 echo -e "${GREEN}All dataset downloads finished successfully!${NC}"
 echo -e "${YELLOW}Contents of the '$DATA_ROOT' directory:${NC}"
 ls -l $DATA_ROOT
+

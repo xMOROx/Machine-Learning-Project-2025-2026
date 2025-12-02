@@ -12,15 +12,18 @@ print_usage() {
     echo "  --dataset       Dataset: mnist, xray, celeba (default: mnist)"
     echo "  --ups           Upsampling factor (default: 4)"
     echo "  --lr            Learning rate (default: 2000)"
+    echo "  --batch-size    Batch size (default: ${DEFAULT_BATCH_SIZE})"
     echo "  --model-path    Path to distilled model"
     echo "  --output-dir    Output directory"
     echo "  --gpu           GPU device ID (default: 0)"
+    echo "  --low-vram      Use low VRAM settings for small GPUs"
     echo "  -h, --help      Show this help message"
 }
 
 DATASET="mnist"
 UPS=4
 LR=2000
+BATCH_SIZE="${DEFAULT_BATCH_SIZE}"
 GPU=0
 
 while [[ $# -gt 0 ]]; do
@@ -37,6 +40,10 @@ while [[ $# -gt 0 ]]; do
             LR="$2"
             shift 2
             ;;
+        --batch-size)
+            BATCH_SIZE="$2"
+            shift 2
+            ;;
         --model-path)
             MODEL_PATH="$2"
             shift 2
@@ -48,6 +55,10 @@ while [[ $# -gt 0 ]]; do
         --gpu)
             GPU="$2"
             shift 2
+            ;;
+        --low-vram)
+            BATCH_SIZE=16
+            shift
             ;;
         -h|--help)
             print_usage
@@ -89,6 +100,11 @@ case ${DATASET} in
     celeba)
         DATA_PATH="${DATA_DIR}/diet/celeba/"
         ;;
+    *)
+        log_error "Unknown dataset: ${DATASET}"
+        print_usage
+        exit 1
+        ;;
 esac
 
 python3 "${SCRIPT_DIR}/diet_scripts/python/inference.py" \
@@ -97,6 +113,7 @@ python3 "${SCRIPT_DIR}/diet_scripts/python/inference.py" \
     --model-path "${MODEL_PATH}" \
     --output-dir "${OUTPUT_DIR}" \
     --lr "${LR}" \
-    --ups "${UPS}"
+    --ups "${UPS}" \
+    --batch-size "${BATCH_SIZE}"
 
 log_success "Inference completed"

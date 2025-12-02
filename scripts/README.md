@@ -125,6 +125,7 @@ Common options:
 ### download_diet_data.sh
 
 Downloads datasets for DiET:
+
 - `--mnist`: Colorized MNIST (clones from GitHub)
 - `--xray`: Chest X-ray (requires Kaggle API)
 - `--celeba`: CelebA (requires Kaggle API)
@@ -132,6 +133,7 @@ Downloads datasets for DiET:
 ### download_htp_data.sh
 
 Downloads datasets for How-to-Probe:
+
 - `--imagenet`: ImageNet (manual download required)
 - `--coco`: COCO 2014
 - `--voc`: Pascal VOC 2007/2012
@@ -139,6 +141,7 @@ Downloads datasets for How-to-Probe:
 ### download_project_data.sh
 
 Downloads project-specific datasets:
+
 - `--cifar10`: CIFAR-10
 - `--glue`: GLUE SST-2
 - `--adult`: Adult Census

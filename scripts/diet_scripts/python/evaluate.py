@@ -1,8 +1,6 @@
 import os
-import sys
 import argparse
 import glob
-import time
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
@@ -100,7 +98,6 @@ def load_xray_data(data_path, noise_class="NORMAL"):
 def pixel_perturbation(model, data_loader, mask, perturbation_percents, args):
     model.eval()
     ups = nn.Upsample(scale_factor=args.ups, mode="bilinear")
-    sm = nn.Softmax(dim=1)
 
     results = {p: {"correct": 0, "total": 0} for p in perturbation_percents}
 

@@ -1,7 +1,5 @@
 import os
-import sys
 import argparse
-import time
 import glob
 import torch
 import torch.nn as nn
@@ -155,11 +153,11 @@ def get_predictions(model, data, labels, num_classes, device, from_disk=True):
     preds = torch.zeros((len(labels), num_classes))
     if from_disk:
         loader = torch.utils.data.DataLoader(
-            DatasetFromDisk(data, labels), batch_size=1024, shuffle=False
+            DatasetFromDisk(data, labels), batch_size=128, shuffle=False
         )
     else:
         loader = torch.utils.data.DataLoader(
-            Dataset(data, labels), batch_size=1024, shuffle=False
+            Dataset(data, labels), batch_size=128, shuffle=False
         )
 
     sm = nn.Softmax(dim=1)
