@@ -15,9 +15,10 @@ print_usage() {
   echo "  all               Run everything (download + diet + htp)"
   echo ""
   echo "Download options:"
-  echo "  --diet            Download DiET datasets (Colorized MNIST, Chest X-ray, CelebA)"
-  echo "  --htp             Download HTP datasets (ImageNet, COCO, VOC)"
-  echo "  --project         Download project datasets (CIFAR-10, SST-2, Adult)"
+  echo "  --cifar10         Download CIFAR-10 dataset"
+  echo "  --glue            Download GLUE SST-2 dataset"
+  echo "  --mnist           Download Colorized MNIST dataset"
+  echo "  --adult           Download Adult Census dataset"
   echo "  --all             Download all datasets"
   echo ""
   echo "DiET options:"
@@ -47,6 +48,7 @@ print_usage() {
   echo ""
   echo "Examples:"
   echo "  $0 download --all"
+  echo "  $0 download --cifar10 --mnist"
   echo "  $0 diet --dataset mnist --epochs 10"
   echo "  $0 diet --dataset mnist --low-vram   # For small GPUs"
   echo "  $0 htp --method dino --backbone resnet50"
@@ -54,9 +56,10 @@ print_usage() {
 }
 
 COMMAND=""
-DOWNLOAD_DIET=false
-DOWNLOAD_HTP=false
-DOWNLOAD_PROJECT=false
+DOWNLOAD_CIFAR=false
+DOWNLOAD_GLUE=false
+DOWNLOAD_MNIST=false
+DOWNLOAD_ADULT=false
 DATASET="mnist"
 EPOCHS=10
 UPS=4
@@ -65,7 +68,7 @@ METHOD="dino"
 BACKBONE="resnet50"
 PROBE_TYPE="linear"
 GPU=0
-GPUS=4
+GPUS=1
 DRY_RUN=false
 LOW_VRAM=false
 SKIP_PREPARE=false
@@ -85,22 +88,27 @@ shift
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-  --diet)
-    DOWNLOAD_DIET=true
+  --cifar10)
+    DOWNLOAD_CIFAR=true
     shift
     ;;
-  --htp)
-    DOWNLOAD_HTP=true
+  --glue)
+    DOWNLOAD_GLUE=true
     shift
     ;;
-  --project)
-    DOWNLOAD_PROJECT=true
+  --mnist)
+    DOWNLOAD_MNIST=true
+    shift
+    ;;
+  --adult)
+    DOWNLOAD_ADULT=true
     shift
     ;;
   --all)
-    DOWNLOAD_DIET=true
-    DOWNLOAD_HTP=true
-    DOWNLOAD_PROJECT=true
+    DOWNLOAD_CIFAR=true
+    DOWNLOAD_GLUE=true
+    DOWNLOAD_MNIST=true
+    DOWNLOAD_ADULT=true
     shift
     ;;
   --dataset)
@@ -195,28 +203,31 @@ run_cmd() {
 cmd_download() {
   log_info "=== Downloading Datasets ==="
 
-  if [ "${DOWNLOAD_DIET}" = false ] && [ "${DOWNLOAD_HTP}" = false ] && [ "${DOWNLOAD_PROJECT}" = false ]; then
-    log_error "Specify what to download: --diet, --htp, --project, or --all"
+  if ! $DOWNLOAD_CIFAR && ! $DOWNLOAD_GLUE && ! $DOWNLOAD_MNIST && ! $DOWNLOAD_ADULT; then
+    log_error "Specify what to download: --cifar10, --glue, --mnist, --adult, or --all"
     exit 1
   fi
 
-  if [ "${DOWNLOAD_DIET}" = true ]; then
-    log_info "Downloading DiET datasets..."
-    run_cmd "${SCRIPT_DIR}/download_diet_data.sh"
+  DOWNLOAD_ARGS=""
+  if [ "${DOWNLOAD_CIFAR}" = true ]; then
+    DOWNLOAD_ARGS="${DOWNLOAD_ARGS} --cifar10"
+  fi
+  if [ "${DOWNLOAD_GLUE}" = true ]; then
+    DOWNLOAD_ARGS="${DOWNLOAD_ARGS} --glue"
+  fi
+  if [ "${DOWNLOAD_MNIST}" = true ]; then
+    DOWNLOAD_ARGS="${DOWNLOAD_ARGS} --mnist"
+  fi
+  if [ "${DOWNLOAD_ADULT}" = true ]; then
+    DOWNLOAD_ARGS="${DOWNLOAD_ARGS} --adult"
   fi
 
-  if [ "${DOWNLOAD_HTP}" = true ]; then
-    log_info "Downloading HTP datasets..."
-    run_cmd "${SCRIPT_DIR}/download_htp_data.sh"
-  fi
-
-  if [ "${DOWNLOAD_PROJECT}" = true ]; then
-    log_info "Downloading project datasets..."
-    run_cmd "${SCRIPT_DIR}/download_project_data.sh"
-  fi
+  run_cmd "${SCRIPT_DIR}/download_project_data.sh" ${DOWNLOAD_ARGS}
 
   log_success "Download completed"
 }
+
+# ...existing code...
 
 cmd_diet() {
   log_info "=== Running DiET Pipeline ==="
