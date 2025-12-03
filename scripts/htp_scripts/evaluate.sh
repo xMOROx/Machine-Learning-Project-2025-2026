@@ -13,7 +13,7 @@ print_usage() {
     echo "  --dataset         Dataset: imagenet, coco, voc (default: imagenet for gridpg, voc for epg)"
     echo "  --model-path      Path to model checkpoint"
     echo "  --model-config    Path to model config (for mmpretrain, optional)"
-    echo "  --data-root       Path to dataset root"
+    echo "  --data-dir        Path to dataset root"
     echo "  --output-dir      Output directory for results"
     echo "  --grid-size       Grid size for GridPG: 2 or 3 (default: 3)"
     echo "  --confidence      Confidence threshold for GridPG (default: 0.95)"
@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
             MODEL_CONFIG="$2"
             shift 2
             ;;
-        --data-root)
+        --data-dir)
             DATA_ROOT="$2"
             shift 2
             ;;

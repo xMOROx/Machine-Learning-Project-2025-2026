@@ -14,7 +14,7 @@ print_usage() {
     echo "  --probe-type    Probe type: linear, bcos-1, bcos-2, bcos-3, std-2, std-3 (default: linear)"
     echo "  --loss          Loss function: bce, ce (default: bce)"
     echo "  --checkpoint    Path to pretrained backbone checkpoint"
-    echo "  --data-root     Path to dataset root"
+    echo "  --data-dir      Path to dataset root"
     echo "  --output-dir    Output directory for probe checkpoints"
     echo "  --epochs        Number of epochs (default: 100)"
     echo "  --gpus          Number of GPUs (default: 4)"
@@ -52,7 +52,7 @@ while [[ $# -gt 0 ]]; do
             CHECKPOINT="$2"
             shift 2
             ;;
-        --data-root)
+        --data-dir)
             DATA_ROOT="$2"
             shift 2
             ;;

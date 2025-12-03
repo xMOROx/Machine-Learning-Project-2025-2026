@@ -20,10 +20,12 @@ print_usage() {
   echo "  --mnist           Download Colorized MNIST dataset"
   echo "  --adult           Download Adult Census dataset"
   echo "  --all             Download all datasets"
+  echo "  --data-dir        Custom data directory (default: ${DATA_DIR})"
   echo ""
   echo "DiET options:"
   echo "  --dataset         Dataset: mnist, xray, celeba (default: mnist)"
   echo "  --epochs          Training epochs (default: 10)"
+  echo "  --batch-size      Batch size (default: ${DEFAULT_BATCH_SIZE})"
   echo "  --ups             Upsampling factor (default: 4)"
   echo "  --lr              Learning rate for distillation (default: 2000)"
   echo "  --skip-prepare    Skip data preparation"
@@ -60,8 +62,10 @@ DOWNLOAD_CIFAR=false
 DOWNLOAD_GLUE=false
 DOWNLOAD_MNIST=false
 DOWNLOAD_ADULT=false
+CUSTOM_DATA_DIR=""
 DATASET="mnist"
 EPOCHS=10
+BATCH_SIZE="${DEFAULT_BATCH_SIZE}"
 UPS=4
 LR=2000
 METHOD="dino"
@@ -111,12 +115,20 @@ while [[ $# -gt 0 ]]; do
     DOWNLOAD_ADULT=true
     shift
     ;;
+  --data-dir)
+    CUSTOM_DATA_DIR="$2"
+    shift 2
+    ;;
   --dataset)
     DATASET="$2"
     shift 2
     ;;
   --epochs)
     EPOCHS="$2"
+    shift 2
+    ;;
+  --batch-size)
+    BATCH_SIZE="$2"
     shift 2
     ;;
   --ups)
@@ -154,6 +166,7 @@ while [[ $# -gt 0 ]]; do
   --low-vram)
     LOW_VRAM=true
     export LOW_VRAM=true
+    BATCH_SIZE=16
     shift
     ;;
   --skip-prepare)
@@ -221,18 +234,20 @@ cmd_download() {
   if [ "${DOWNLOAD_ADULT}" = true ]; then
     DOWNLOAD_ARGS="${DOWNLOAD_ARGS} --adult"
   fi
+  if [ -n "${CUSTOM_DATA_DIR}" ]; then
+    DOWNLOAD_ARGS="${DOWNLOAD_ARGS} --data-dir ${CUSTOM_DATA_DIR}"
+  fi
 
   run_cmd "${SCRIPT_DIR}/download_project_data.sh" ${DOWNLOAD_ARGS}
 
   log_success "Download completed"
 }
 
-# ...existing code...
-
 cmd_diet() {
   log_info "=== Running DiET Pipeline ==="
   log_info "Dataset: ${DATASET}"
   log_info "Epochs: ${EPOCHS}"
+  log_info "Batch size: ${BATCH_SIZE}"
   log_info "Upsampling: ${UPS}"
   log_info "Learning rate: ${LR}"
   log_info "GPU: ${GPU}"
@@ -253,6 +268,7 @@ cmd_diet() {
     run_cmd "${SCRIPT_DIR}/diet_scripts/train_baseline.sh" \
       --dataset "${DATASET}" \
       --epochs "${EPOCHS}" \
+      --batch-size "${BATCH_SIZE}" \
       --gpu "${GPU}" \
       ${LOW_VRAM_FLAG}
   fi
@@ -263,6 +279,7 @@ cmd_diet() {
       --dataset "${DATASET}" \
       --ups "${UPS}" \
       --lr "${LR}" \
+      --batch-size "${BATCH_SIZE}" \
       --gpu "${GPU}" \
       ${LOW_VRAM_FLAG}
 
@@ -270,6 +287,7 @@ cmd_diet() {
     run_cmd "${SCRIPT_DIR}/diet_scripts/inference.sh" \
       --dataset "${DATASET}" \
       --ups "${UPS}" \
+      --batch-size "${BATCH_SIZE}" \
       --gpu "${GPU}" \
       ${LOW_VRAM_FLAG}
   fi
@@ -279,6 +297,7 @@ cmd_diet() {
     run_cmd "${SCRIPT_DIR}/diet_scripts/evaluate.sh" \
       --dataset "${DATASET}" \
       --ups "${UPS}" \
+      --batch-size "${BATCH_SIZE}" \
       --eval-type all \
       --gpu "${GPU}" \
       ${LOW_VRAM_FLAG}
@@ -292,13 +311,18 @@ cmd_htp() {
   log_info "Method: ${METHOD}"
   log_info "Backbone: ${BACKBONE}"
   log_info "Probe type: ${PROBE_TYPE}"
+  log_info "Batch size: ${BATCH_SIZE}"
   log_info "GPUs: ${GPUS}"
+  if [ "${LOW_VRAM}" = true ]; then
+    log_info "Low VRAM mode: enabled"
+  fi
 
   if [ "${SKIP_PRETRAIN}" = false ]; then
     log_info "Step 1: Pretraining..."
     run_cmd "${SCRIPT_DIR}/htp_scripts/pretrain.sh" \
       --method "${METHOD}" \
       --backbone "${BACKBONE}" \
+      --batch-size "${BATCH_SIZE}" \
       --gpus "${GPUS}"
   fi
 
@@ -326,9 +350,10 @@ cmd_htp() {
 cmd_all() {
   log_info "=== Running Full Pipeline ==="
 
-  DOWNLOAD_DIET=true
-  DOWNLOAD_HTP=true
-  DOWNLOAD_PROJECT=true
+  DOWNLOAD_CIFAR=true
+  DOWNLOAD_GLUE=true
+  DOWNLOAD_MNIST=true
+  DOWNLOAD_ADULT=true
   cmd_download
 
   cmd_diet
