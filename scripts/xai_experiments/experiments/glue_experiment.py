@@ -18,9 +18,6 @@ import numpy as np
 from typing import Optional, Dict, Any, Tuple, List
 from tqdm import tqdm
 
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 
 class SST2Dataset(Dataset):
     """Dataset class for SST-2 data."""
@@ -116,7 +113,12 @@ class GLUEExperiment:
     def _init_model(self):
         """Initialize the BERT model."""
         if self.model is None:
-            from models.transformer import BertForSequenceClassificationWithIG
+            try:
+                from ..models.transformer import BertForSequenceClassificationWithIG
+            except ImportError:
+                import sys
+                sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                from models.transformer import BertForSequenceClassificationWithIG
             self.model = BertForSequenceClassificationWithIG(
                 model_name=self.model_name,
                 num_labels=2,
@@ -329,7 +331,12 @@ class GLUEExperiment:
         if self.test_texts is None:
             self.prepare_data()
         
-        from explainers.integrated_gradients import IntegratedGradientsText
+        try:
+            from ..explainers.integrated_gradients import IntegratedGradientsText
+        except ImportError:
+            import sys
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from explainers.integrated_gradients import IntegratedGradientsText
         
         # Initialize IG
         ig = IntegratedGradientsText(self.model, self.device)

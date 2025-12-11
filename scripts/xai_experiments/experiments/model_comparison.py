@@ -324,9 +324,12 @@ class ModelComparison:
         Args:
             model_type: "simple" or "resnet"
         """
-        import sys
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from models.cnn import SimpleCNN, ResNetCIFAR
+        try:
+            from ..models.cnn import SimpleCNN, ResNetCIFAR
+        except ImportError:
+            import sys
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from models.cnn import SimpleCNN, ResNetCIFAR
         
         print(f"\n[CNN-{model_type}] Training...")
         start_time = time.time()

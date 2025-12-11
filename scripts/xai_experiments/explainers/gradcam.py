@@ -14,6 +14,12 @@ from typing import Tuple, Optional
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+
 
 class GradCAM:
     """Gradient-weighted Class Activation Mapping for CNN visualization.
@@ -159,7 +165,8 @@ class GradCAM:
         Returns:
             Overlaid image of shape (H, W, 3)
         """
-        import cv2
+        if not CV2_AVAILABLE:
+            raise ImportError("OpenCV (cv2) is required for overlay_heatmap. Install with: pip install opencv-python")
         
         # Resize heatmap to match image size
         heatmap_resized = cv2.resize(heatmap, (image.shape[1], image.shape[0]))
@@ -196,6 +203,9 @@ class GradCAM:
             save_path: Path to save the figure
             show: Whether to display the figure
         """
+        if not CV2_AVAILABLE:
+            raise ImportError("OpenCV (cv2) is required for visualize. Install with: pip install opencv-python")
+        
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
         
         # Original image
@@ -204,7 +214,6 @@ class GradCAM:
         axes[0].axis("off")
         
         # Heatmap
-        import cv2
         heatmap_resized = cv2.resize(heatmap, (original_image.shape[1], original_image.shape[0]))
         axes[1].imshow(heatmap_resized, cmap="jet")
         axes[1].set_title("GradCAM Heatmap")
@@ -251,7 +260,8 @@ class GradCAM:
             max_images: Maximum number of images to display
             show: Whether to display the figure
         """
-        import cv2
+        if not CV2_AVAILABLE:
+            raise ImportError("OpenCV (cv2) is required for visualize_batch. Install with: pip install opencv-python")
         
         n_images = min(len(images), max_images)
         n_cols = min(4, n_images)
@@ -270,7 +280,7 @@ class GradCAM:
             if img.max() <= 1:
                 img = (img * 255).astype(np.uint8)
             
-            heatmap_resized = cv2.resize(heatmaps[i], (img.shape[1], img.shape[0]))
+            cv2.resize(heatmaps[i], (img.shape[1], img.shape[0]))
             overlaid = GradCAM.overlay_heatmap(img, heatmaps[i])
             
             ax.imshow(overlaid)

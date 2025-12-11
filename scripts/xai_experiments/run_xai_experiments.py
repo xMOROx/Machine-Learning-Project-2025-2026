@@ -29,6 +29,10 @@ from typing import Dict, Any
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
+# Configuration constants
+MIN_GLUE_BATCH_SIZE = 4  # Minimum batch size for GLUE/BERT experiments
+LOW_VRAM_THRESHOLD_GB = 8  # GPU memory threshold for low VRAM mode
+
 
 def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
     """Get device configuration optimized for available GPU.
@@ -48,7 +52,7 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
         print(f"GPU Memory: {gpu_memory:.1f} GB")
         
         # RTX 3060 has 12GB VRAM
-        if gpu_memory < 8 or low_vram:
+        if gpu_memory < LOW_VRAM_THRESHOLD_GB or low_vram:
             print("Using low VRAM configuration")
             return {
                 "device": device,
@@ -82,7 +86,7 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
             "device": device,
             "batch_size": 16,
             "cnn_batch_size": 16,
-            "glue_batch_size": 4,
+            "glue_batch_size": MIN_GLUE_BATCH_SIZE,
             "num_workers": 0,
             "cnn_epochs": 2,
             "glue_epochs": 1,
@@ -307,7 +311,7 @@ def main():
     if args.batch_size:
         config["batch_size"] = args.batch_size
         config["cnn_batch_size"] = args.batch_size
-        config["glue_batch_size"] = max(4, args.batch_size // 4)
+        config["glue_batch_size"] = max(MIN_GLUE_BATCH_SIZE, args.batch_size // 4)
     
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)

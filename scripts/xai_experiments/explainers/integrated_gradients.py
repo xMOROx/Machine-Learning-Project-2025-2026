@@ -14,6 +14,12 @@ from typing import Tuple, Optional, Callable
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+
 
 class IntegratedGradients:
     """Integrated Gradients for image model attribution.
@@ -145,7 +151,8 @@ class IntegratedGradients:
             save_path: Path to save figure
             show: Whether to display figure
         """
-        import cv2
+        if not CV2_AVAILABLE:
+            raise ImportError("OpenCV (cv2) is required for visualize. Install with: pip install opencv-python")
         
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
         

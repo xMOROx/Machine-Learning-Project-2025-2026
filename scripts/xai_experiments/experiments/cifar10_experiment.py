@@ -20,11 +20,16 @@ import numpy as np
 from typing import Optional, Dict, Any, Tuple
 from tqdm import tqdm
 
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from models.cnn import SimpleCNN, ResNetCIFAR
-from explainers.gradcam import GradCAM
+# Use relative imports when running as part of the package
+try:
+    from ..models.cnn import SimpleCNN, ResNetCIFAR
+    from ..explainers.gradcam import GradCAM
+except ImportError:
+    # Fallback for direct script execution
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from models.cnn import SimpleCNN, ResNetCIFAR
+    from explainers.gradcam import GradCAM
 
 
 class CIFAR10Experiment:
