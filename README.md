@@ -79,5 +79,102 @@ python scripts/verify.py
 ## 4. Data Download
 
 ```bash
-bash scripts/download_data.sh
+bash scripts/download_project_data.sh --all
 ```
+
+## 5. XAI Experiments
+
+The project includes comprehensive XAI (Explainable AI) experiments with multiple models and explanation methods optimized for RTX 3060 (12GB VRAM).
+
+### 5.1 Available Experiments
+
+| Experiment | Description | XAI Method |
+|------------|-------------|------------|
+| **CIFAR-10** | CNN classification with visual explanations | GradCAM |
+| **GLUE SST-2** | BERT sentiment analysis with text explanations | Integrated Gradients |
+| **Model Comparison** | Compare CNN, RF, LightGBM, SVM, Logistic Regression | - |
+
+### 5.2 Running XAI Experiments
+
+**Run all experiments:**
+```bash
+./scripts/run.sh xai --xai-exp all
+```
+
+**Run specific experiments:**
+```bash
+# CIFAR-10 with GradCAM
+./scripts/run.sh xai --xai-exp cifar10 --epochs 10
+
+# GLUE SST-2 with BERT
+./scripts/run.sh xai --xai-exp glue --epochs 3
+
+# Model comparison
+./scripts/run.sh xai --xai-exp compare
+```
+
+**For RTX 3060 or low VRAM GPUs:**
+```bash
+./scripts/run.sh xai --xai-exp all --low-vram
+```
+
+**Direct Python usage:**
+```bash
+cd scripts/xai_experiments
+python run_xai_experiments.py --all --low-vram
+```
+
+### 5.3 XAI Outputs
+
+Results are saved to `outputs/xai_experiments/`:
+
+```
+outputs/xai_experiments/
+├── cifar10/
+│   ├── resnet_cifar10.pth          # Trained model
+│   ├── gradcam_batch.png           # Batch visualization
+│   ├── gradcam_visualizations/     # Individual GradCAM images
+│   └── experiment_results.json     # Metrics and results
+├── glue_sst2/
+│   ├── bert_sst2/                  # Fine-tuned BERT model
+│   ├── ig_visualizations/          # Token attribution images
+│   └── experiment_results.json     # Metrics and results
+└── model_comparison/
+    └── comparison_results.json     # Model comparison metrics
+```
+
+### 5.4 XAI Methods Implemented
+
+#### GradCAM (Gradient-weighted Class Activation Mapping)
+- Visualizes which regions of an image are important for CNN predictions
+- Produces heatmaps overlaid on original images
+- Suitable for any CNN architecture
+
+#### Integrated Gradients
+- Attributes prediction to input features along a path from baseline
+- For text: highlights important tokens for classification
+- Satisfies axioms of sensitivity and implementation invariance
+
+### 5.5 Model Architectures
+
+| Model | Type | Description |
+|-------|------|-------------|
+| SimpleCNN | Vision | 4-layer CNN optimized for CIFAR-10 |
+| ResNetCIFAR | Vision | ResNet-18 adapted for 32x32 images |
+| BERT | Language | bert-base-uncased for sentiment analysis |
+| Random Forest | Traditional ML | Ensemble of decision trees |
+| LightGBM | Traditional ML | Gradient boosting framework |
+| SVM | Traditional ML | Support Vector Machine with RBF kernel |
+| Logistic Regression | Traditional ML | Linear classifier |
+
+### 5.6 Hardware Optimization
+
+The orchestration script automatically detects GPU memory and adjusts settings:
+
+| GPU Memory | Batch Size | Epochs | Workers |
+|------------|------------|--------|---------|
+| ≥ 8GB | 64 | 10 | 4 |
+| < 8GB | 16 | 5 | 2 |
+| CPU only | 16 | 2 | 0 |
+
+Use `--low-vram` flag to force low memory configuration.
