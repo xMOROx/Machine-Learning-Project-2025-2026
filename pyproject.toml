@@ -28,8 +28,8 @@ dependencies = [
     "zennit==0.5.1",
     "tqdm",
     "datasets>=4.4.1",
-    "transformers>=4.30.0",
-    "lightgbm>=4.0.0",
+    "transformers>=4.48.0",
+    "lightgbm>=4.6.0",
 ]
 
 [project.optional-dependencies]
