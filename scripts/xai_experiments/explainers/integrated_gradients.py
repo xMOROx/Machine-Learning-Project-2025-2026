@@ -11,6 +11,10 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from typing import Tuple, Optional, Callable
+
+# Use non-interactive backend to avoid TCL/Tk errors in headless environments
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
