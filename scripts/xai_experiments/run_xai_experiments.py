@@ -5,6 +5,7 @@ This script orchestrates all XAI experiments including:
 - CIFAR-10 classification with GradCAM
 - GLUE SST-2 with BERT and Integrated Gradients
 - Model comparison (CNN, RF, LightGBM, SVM, Logistic Regression)
+- DiET comparison (discriminative feature attribution vs basic XAI)
 
 Optimized for RTX 3060 (12GB VRAM) with configurable memory usage.
 
@@ -13,6 +14,7 @@ Usage:
     python run_xai_experiments.py --cifar10                # Run CIFAR-10 only
     python run_xai_experiments.py --glue                   # Run GLUE SST-2 only
     python run_xai_experiments.py --compare                # Run model comparison
+    python run_xai_experiments.py --diet                   # Run DiET comparison
     python run_xai_experiments.py --low-vram               # Use low VRAM settings
 """
 
@@ -225,6 +227,53 @@ def run_model_comparison(config: Dict[str, Any], args: argparse.Namespace) -> Di
     return results
 
 
+def run_diet_experiment(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
+    """Run DiET comparison experiment.
+    
+    Compares DiET discriminative feature attribution with basic XAI methods
+    (GradCAM for images, Integrated Gradients for text).
+    
+    Args:
+        config: Device configuration
+        args: Command line arguments
+        
+    Returns:
+        Comparison results
+    """
+    from experiments.xai_comparison import XAIMethodsComparison
+    
+    print("\n" + "=" * 60)
+    print("Starting DiET vs Basic XAI Comparison")
+    print("=" * 60)
+    
+    comparison_config = {
+        "device": config["device"],
+        "data_dir": args.data_dir,
+        "output_dir": os.path.join(args.output_dir, "diet_comparison"),
+        "batch_size": config["cnn_batch_size"],
+        "max_samples_image": config.get("sample_size", 3000),
+        "max_samples_text": config.get("sample_size", 1000) // 2,
+        "epochs_image": min(3, config.get("cnn_epochs", 3)),
+        "epochs_text": min(2, config.get("glue_epochs", 2)),
+        "comparison_samples": config.get("gradcam_samples", 16),
+        "comparison_samples_text": 10
+    }
+    
+    comparison = XAIMethodsComparison(comparison_config)
+    
+    # Determine which experiments to run:
+    # - If neither --diet-images nor --diet-text specified, run both
+    # - If only --diet-images specified, run images only
+    # - If only --diet-text specified, run text only
+    # - If both specified, run both
+    run_images = args.diet_images or not args.diet_text
+    run_text = args.diet_text or not args.diet_images
+    
+    results = comparison.run_full_comparison(run_images=run_images, run_text=run_text)
+    
+    return results
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -236,6 +285,9 @@ Examples:
   python run_xai_experiments.py --cifar10 --epochs 5     # Run CIFAR-10 only
   python run_xai_experiments.py --glue                   # Run GLUE SST-2 only
   python run_xai_experiments.py --compare                # Run model comparison
+  python run_xai_experiments.py --diet                   # Run DiET comparison (images + text)
+  python run_xai_experiments.py --diet --diet-images     # DiET for images only
+  python run_xai_experiments.py --diet --diet-text       # DiET for text only
   python run_xai_experiments.py --all --low-vram         # Low VRAM mode
   python run_xai_experiments.py --cifar10 --skip-training  # Skip training, use saved model
         """
@@ -250,6 +302,12 @@ Examples:
                         help="Run GLUE SST-2 BERT experiment")
     parser.add_argument("--compare", action="store_true",
                         help="Run model comparison experiment")
+    parser.add_argument("--diet", action="store_true",
+                        help="Run DiET vs basic XAI comparison")
+    parser.add_argument("--diet-images", action="store_true",
+                        help="Run DiET comparison for images only (with --diet)")
+    parser.add_argument("--diet-text", action="store_true",
+                        help="Run DiET comparison for text only (with --diet)")
     
     # Common options
     parser.add_argument("--data-dir", type=str, default="./data",
@@ -286,9 +344,10 @@ def main():
     args = parse_args()
     
     # If no experiment selected, show help
-    if not (args.all or args.cifar10 or args.glue or args.compare):
+    if not (args.all or args.cifar10 or args.glue or args.compare or args.diet):
         print("No experiment selected. Use --help for usage information.")
         print("Quick start: python run_xai_experiments.py --all")
+        print("For DiET comparison: python run_xai_experiments.py --diet")
         return
     
     # Set GPU
@@ -335,6 +394,9 @@ def main():
         if args.all or args.compare:
             all_results["experiments"]["model_comparison"] = run_model_comparison(config, args)
         
+        if args.all or args.diet:
+            all_results["experiments"]["diet_comparison"] = run_diet_experiment(config, args)
+        
     except KeyboardInterrupt:
         print("\n\nExperiment interrupted by user.")
     except Exception as e:
@@ -380,6 +442,22 @@ def main():
         glue_results = all_results["experiments"]["glue_sst2"]
         if isinstance(glue_results, dict) and "final_val_accuracy" in glue_results:
             print(f"  Validation Accuracy: {glue_results['final_val_accuracy']:.2f}%")
+    
+    if "diet_comparison" in all_results["experiments"]:
+        print(f"\nDiET Comparison Results:")
+        diet_results = all_results["experiments"]["diet_comparison"]
+        if isinstance(diet_results, dict):
+            if "image_experiments" in diet_results and diet_results["image_experiments"]:
+                img = diet_results["image_experiments"]
+                print(f"  Image (CIFAR-10):")
+                print(f"    GradCAM score: {img.get('gradcam_mean_score', 'N/A')}")
+                print(f"    DiET score: {img.get('diet_mean_score', 'N/A')}")
+                if img.get("diet_better"):
+                    print(f"    ✓ DiET improves attribution quality")
+            if "text_experiments" in diet_results and diet_results["text_experiments"]:
+                txt = diet_results["text_experiments"]
+                print(f"  Text (SST-2):")
+                print(f"    IG-DiET overlap: {txt.get('ig_diet_overlap', 'N/A')}")
     
     print("\n" + "=" * 60)
 

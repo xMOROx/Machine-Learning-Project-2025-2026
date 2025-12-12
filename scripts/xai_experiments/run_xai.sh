@@ -52,10 +52,11 @@ print_usage() {
     echo "XAI Experiments Orchestration Script for Machine Learning Project"
     echo ""
     echo "Experiments:"
-    echo "  all       Run all experiments (CIFAR-10, GLUE, comparison)"
+    echo "  all       Run all experiments (CIFAR-10, GLUE, comparison, DiET)"
     echo "  cifar10   Run CIFAR-10 with GradCAM"
     echo "  glue      Run GLUE SST-2 with BERT and Integrated Gradients"
     echo "  compare   Run model comparison (CNN, RF, LightGBM, SVM, LR)"
+    echo "  diet      Run DiET vs basic XAI comparison (images + text)"
     echo ""
     echo "Options:"
     echo "  --low-vram       Use low VRAM settings for GPUs with < 8GB"
@@ -65,6 +66,8 @@ print_usage() {
     echo "  --batch-size N   Batch size"
     echo "  --model-type T   CNN model type: simple or resnet (default: resnet)"
     echo "  --skip-training  Skip training, use saved models"
+    echo "  --diet-images    DiET for images only (with diet experiment)"
+    echo "  --diet-text      DiET for text only (with diet experiment)"
     echo "  --data-dir DIR   Data directory (default: ${PROJECT_ROOT}/data)"
     echo "  --output-dir DIR Output directory (default: ${PROJECT_ROOT}/outputs/xai_experiments)"
     echo "  -h, --help       Show this help message"
@@ -74,10 +77,13 @@ print_usage() {
     echo "  $0 cifar10 --epochs 5               # CIFAR-10 with 5 epochs"
     echo "  $0 glue --low-vram                  # GLUE with low VRAM"
     echo "  $0 compare                          # Model comparison"
+    echo "  $0 diet                             # DiET comparison"
+    echo "  $0 diet --diet-images               # DiET for images only"
     echo "  $0 cifar10 --skip-training          # Use saved model"
     echo ""
     echo "RTX 3060 Recommended Settings:"
     echo "  $0 all --epochs 10 --batch-size 32  # Balanced speed/memory"
+    echo "  $0 diet --low-vram                  # DiET with memory optimization"
 }
 
 # Default values
@@ -89,6 +95,8 @@ EPOCHS=""
 BATCH_SIZE=""
 MODEL_TYPE="resnet"
 SKIP_TRAINING=""
+DIET_IMAGES=""
+DIET_TEXT=""
 DATA_DIR="${PROJECT_ROOT}/data"
 OUTPUT_DIR="${PROJECT_ROOT}/outputs/xai_experiments"
 
@@ -131,6 +139,14 @@ while [[ $# -gt 0 ]]; do
             SKIP_TRAINING="--skip-training"
             shift
             ;;
+        --diet-images)
+            DIET_IMAGES="--diet-images"
+            shift
+            ;;
+        --diet-text)
+            DIET_TEXT="--diet-text"
+            shift
+            ;;
         --data-dir)
             DATA_DIR="$2"
             shift 2
@@ -153,7 +169,7 @@ done
 
 # Validate experiment
 case ${EXPERIMENT} in
-    all|cifar10|glue|compare)
+    all|cifar10|glue|compare|diet)
         ;;
     -h|--help|help)
         print_usage
@@ -179,6 +195,9 @@ case ${EXPERIMENT} in
         ;;
     compare)
         EXPERIMENT_FLAG="--compare"
+        ;;
+    diet)
+        EXPERIMENT_FLAG="--diet"
         ;;
 esac
 
@@ -219,7 +238,9 @@ python3 "${XAI_DIR}/run_xai_experiments.py" \
     ${CPU} \
     ${EPOCHS} \
     ${BATCH_SIZE} \
-    ${SKIP_TRAINING}
+    ${SKIP_TRAINING} \
+    ${DIET_IMAGES} \
+    ${DIET_TEXT}
 
 EXIT_CODE=$?
 
