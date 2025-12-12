@@ -269,7 +269,12 @@ def run_diet_experiment(config: Dict[str, Any], args: argparse.Namespace) -> Dic
     run_images = args.diet_images or not args.diet_text
     run_text = args.diet_text or not args.diet_images
     
-    results = comparison.run_full_comparison(run_images=run_images, run_text=run_text)
+    # Use skip_training flag to reuse previously trained models
+    results = comparison.run_full_comparison(
+        run_images=run_images, 
+        run_text=run_text,
+        skip_training=args.skip_training
+    )
     
     return results
 

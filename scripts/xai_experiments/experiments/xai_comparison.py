@@ -62,10 +62,13 @@ class XAIMethodsComparison:
             "summary": {}
         }
     
-    def run_image_comparison(self) -> Dict[str, Any]:
+    def run_image_comparison(self, skip_training: bool = False) -> Dict[str, Any]:
         """Run image-based XAI comparison (CIFAR-10).
         
         Compares GradCAM vs DiET.
+        
+        Args:
+            skip_training: If True, try to load previously trained models
         
         Returns:
             Image experiment results
@@ -92,7 +95,7 @@ class XAIMethodsComparison:
         
         # Run DiET experiment (includes GradCAM comparison)
         experiment = DiETExperiment(image_config)
-        results = experiment.run_full_experiment()
+        results = experiment.run_full_experiment(skip_training=skip_training)
         
         self.results["image_experiments"] = {
             "baseline_accuracy": results["baseline"]["final_test_acc"],
@@ -107,10 +110,13 @@ class XAIMethodsComparison:
         
         return self.results["image_experiments"]
     
-    def run_text_comparison(self) -> Dict[str, Any]:
+    def run_text_comparison(self, skip_training: bool = False) -> Dict[str, Any]:
         """Run text-based XAI comparison (SST-2).
         
         Compares Integrated Gradients vs DiET.
+        
+        Args:
+            skip_training: If True, try to load previously trained models
         
         Returns:
             Text experiment results
@@ -134,7 +140,7 @@ class XAIMethodsComparison:
         }
         
         experiment = DiETTextExperiment(text_config)
-        results = experiment.run_full_experiment()
+        results = experiment.run_full_experiment(skip_training=skip_training)
         
         self.results["text_experiments"] = {
             "baseline_accuracy": results["baseline"]["val_acc"],
@@ -307,13 +313,15 @@ class XAIMethodsComparison:
     def run_full_comparison(
         self,
         run_images: bool = True,
-        run_text: bool = True
+        run_text: bool = True,
+        skip_training: bool = False
     ) -> Dict[str, Any]:
         """Run complete comparison pipeline.
         
         Args:
             run_images: Whether to run image experiments
             run_text: Whether to run text experiments
+            skip_training: If True, try to load previously trained models
             
         Returns:
             All comparison results
@@ -321,6 +329,8 @@ class XAIMethodsComparison:
         print("=" * 70)
         print("XAI METHODS COMPARISON PIPELINE")
         print("DiET vs Basic XAI Methods (GradCAM, Integrated Gradients)")
+        if skip_training:
+            print("(Using previously trained models if available)")
         print("=" * 70)
         
         total_start = time.time()
@@ -328,14 +338,14 @@ class XAIMethodsComparison:
         # Run experiments
         if run_images:
             try:
-                self.run_image_comparison()
+                self.run_image_comparison(skip_training=skip_training)
             except Exception as e:
                 print(f"Image comparison failed: {e}")
                 traceback.print_exc()
         
         if run_text:
             try:
-                self.run_text_comparison()
+                self.run_text_comparison(skip_training=skip_training)
             except Exception as e:
                 print(f"Text comparison failed: {e}")
                 traceback.print_exc()

@@ -390,6 +390,40 @@ class DiETTextExperiment:
         
         return 100 * correct / 100
     
+    def load_baseline(self, model_path: str = None) -> bool:
+        """Load a previously trained baseline BERT model.
+        
+        Args:
+            model_path: Path to the model checkpoint. If None, uses default path.
+            
+        Returns:
+            True if model was loaded successfully, False otherwise
+        """
+        self._init_model()
+        
+        if model_path is None:
+            model_path = os.path.join(self.output_dir, "bert_baseline")
+        
+        if not os.path.exists(model_path):
+            print(f"Model not found at {model_path}")
+            return False
+        
+        try:
+            self.model.load_model(model_path)
+            self.model.eval_mode()
+            val_acc = self._evaluate_model()
+            print(f"Loaded baseline model from {model_path}")
+            print(f"Validation accuracy: {val_acc:.2f}%")
+            
+            self.results["baseline"] = {
+                "val_acc": val_acc,
+                "loaded_from": model_path
+            }
+            return True
+        except Exception as e:
+            print(f"Failed to load model from {model_path}: {e}")
+            return False
+    
     def run_diet(self, rounding_steps: int = 2) -> Dict[str, Any]:
         """Run DiET for token attribution learning.
         
@@ -610,8 +644,12 @@ class DiETTextExperiment:
         
         print(f"Text comparison saved to {viz_dir}")
     
-    def run_full_experiment(self) -> Dict[str, Any]:
+    def run_full_experiment(self, skip_training: bool = False) -> Dict[str, Any]:
         """Run complete DiET text experiment.
+        
+        Args:
+            skip_training: If True, try to load previously trained baseline model
+                          instead of training from scratch
         
         Returns:
             All results
@@ -627,10 +665,17 @@ class DiETTextExperiment:
         max_samples = self.config.get("max_samples", 2000)
         self.prepare_data(max_samples)
         
-        # Step 2: Train baseline
-        print("\n[Step 2/4] Training baseline BERT...")
-        epochs = self.config.get("epochs", 2)
-        self.train_baseline(epochs)
+        # Step 2: Train or load baseline
+        if skip_training:
+            print("\n[Step 2/4] Loading baseline BERT...")
+            if not self.load_baseline():
+                print("Failed to load saved model. Training from scratch...")
+                epochs = self.config.get("epochs", 2)
+                self.train_baseline(epochs)
+        else:
+            print("\n[Step 2/4] Training baseline BERT...")
+            epochs = self.config.get("epochs", 2)
+            self.train_baseline(epochs)
         
         # Step 3: Run DiET
         print("\n[Step 3/4] Running DiET distillation...")

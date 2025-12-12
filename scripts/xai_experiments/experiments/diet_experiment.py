@@ -484,6 +484,38 @@ class DiETExperiment:
         
         return 100 * correct / total
     
+    def load_baseline(self, model_path: str = None) -> bool:
+        """Load a previously trained baseline model.
+        
+        Args:
+            model_path: Path to the model checkpoint. If None, uses default path.
+            
+        Returns:
+            True if model was loaded successfully, False otherwise
+        """
+        if model_path is None:
+            model_path = os.path.join(self.output_dir, f"baseline_{self.model_type}.pth")
+        
+        if not os.path.exists(model_path):
+            print(f"Model not found at {model_path}")
+            return False
+        
+        try:
+            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            self.model.eval()
+            test_acc = self._evaluate_model()
+            print(f"Loaded baseline model from {model_path}")
+            print(f"Test accuracy: {test_acc:.2f}%")
+            
+            self.results["baseline"] = {
+                "final_test_acc": test_acc,
+                "loaded_from": model_path
+            }
+            return True
+        except Exception as e:
+            print(f"Failed to load model from {model_path}: {e}")
+            return False
+    
     def run_diet(self) -> Dict[str, Any]:
         """Run DiET distillation process.
         
@@ -791,8 +823,12 @@ class DiETExperiment:
         
         print(f"Comparison visualizations saved to {viz_dir}")
     
-    def run_full_experiment(self) -> Dict[str, Any]:
+    def run_full_experiment(self, skip_training: bool = False) -> Dict[str, Any]:
         """Run complete DiET experiment with comparison.
+        
+        Args:
+            skip_training: If True, try to load previously trained baseline model
+                          instead of training from scratch
         
         Returns:
             All experiment results
@@ -808,10 +844,17 @@ class DiETExperiment:
         max_samples = self.config.get("max_samples", 5000)
         self.prepare_data(max_samples)
         
-        # Step 2: Train baseline
-        print("\n[Step 2/4] Training baseline model...")
-        baseline_epochs = self.config.get("baseline_epochs", 5)
-        self.train_baseline(baseline_epochs)
+        # Step 2: Train or load baseline
+        if skip_training:
+            print("\n[Step 2/4] Loading baseline model...")
+            if not self.load_baseline():
+                print("Failed to load saved model. Training from scratch...")
+                baseline_epochs = self.config.get("baseline_epochs", 5)
+                self.train_baseline(baseline_epochs)
+        else:
+            print("\n[Step 2/4] Training baseline model...")
+            baseline_epochs = self.config.get("baseline_epochs", 5)
+            self.train_baseline(baseline_epochs)
         
         # Step 3: Run DiET
         print("\n[Step 3/4] Running DiET distillation...")
