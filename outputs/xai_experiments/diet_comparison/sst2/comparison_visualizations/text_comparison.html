@@ -1,0 +1,126 @@
+
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                .sample { margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 20px; }
+                .method { margin: 10px 0; }
+                .label { font-weight: bold; }
+                .tokens { display: flex; flex-wrap: wrap; gap: 5px; }
+                .token { background: #e0e0e0; padding: 2px 6px; border-radius: 3px; }
+                .top-token { background: #4CAF50; color: white; }
+            </style>
+        </head>
+        <body>
+            <h1>DiET vs Integrated Gradients Comparison</h1>
+        
+            <div class="sample">
+                <h3>Sample 1</h3>
+                <p><span class="label">Text:</span> it 's a charming and often affecting journey . ...</p>
+                <p><span class="label">True Label:</span> positive</p>
+                <p><span class="label">Predicted:</span> positive (conf: 99.67%)</p>
+                <p><span class="label">Top-k Overlap:</span> 60.00%</p>
+                
+                <div class="method">
+                    <p><span class="label">IG Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">it</span><span class="token top-token">s</span><span class="token top-token">charming</span><span class="token top-token">and</span><span class="token top-token">journey</span>
+                    </div>
+                </div>
+                
+                <div class="method">
+                    <p><span class="label">DiET Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">it</span><span class="token top-token">'</span><span class="token top-token">charming</span><span class="token top-token">often</span><span class="token top-token">journey</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sample">
+                <h3>Sample 2</h3>
+                <p><span class="label">Text:</span> unflinchingly bleak and desperate ...</p>
+                <p><span class="label">True Label:</span> negative</p>
+                <p><span class="label">Predicted:</span> positive (conf: 60.22%)</p>
+                <p><span class="label">Top-k Overlap:</span> 0.00%</p>
+                
+                <div class="method">
+                    <p><span class="label">IG Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">desperate</span><span class="token top-token">##ly</span><span class="token top-token">bleak</span><span class="token top-token">and</span>
+                    </div>
+                </div>
+                
+                <div class="method">
+                    <p><span class="label">DiET Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">un</span><span class="token top-token">##fl</span><span class="token top-token">##in</span><span class="token top-token">##ching</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sample">
+                <h3>Sample 3</h3>
+                <p><span class="label">Text:</span> allows us to hope that nolan is poised to embark a...</p>
+                <p><span class="label">True Label:</span> positive</p>
+                <p><span class="label">Predicted:</span> positive (conf: 99.41%)</p>
+                <p><span class="label">Top-k Overlap:</span> 0.00%</p>
+                
+                <div class="method">
+                    <p><span class="label">IG Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">is</span><span class="token top-token">career</span><span class="token top-token">##vent</span><span class="token top-token">##ive</span><span class="token top-token">filmmaker</span>
+                    </div>
+                </div>
+                
+                <div class="method">
+                    <p><span class="label">DiET Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">us</span><span class="token top-token">to</span><span class="token top-token">hope</span><span class="token top-token">nolan</span><span class="token top-token">to</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sample">
+                <h3>Sample 4</h3>
+                <p><span class="label">Text:</span> the acting , costumes , music , cinematography and...</p>
+                <p><span class="label">True Label:</span> positive</p>
+                <p><span class="label">Predicted:</span> positive (conf: 60.30%)</p>
+                <p><span class="label">Top-k Overlap:</span> 0.00%</p>
+                
+                <div class="method">
+                    <p><span class="label">IG Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">##tou</span><span class="token top-token">##nding</span><span class="token top-token">##ter</span><span class="token top-token">local</span><span class="token top-token">##es</span>
+                    </div>
+                </div>
+                
+                <div class="method">
+                    <p><span class="label">DiET Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">the</span><span class="token top-token">acting</span><span class="token top-token">,</span><span class="token top-token">costumes</span><span class="token top-token">,</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sample">
+                <h3>Sample 5</h3>
+                <p><span class="label">Text:</span> it 's slow -- very , very slow . ...</p>
+                <p><span class="label">True Label:</span> negative</p>
+                <p><span class="label">Predicted:</span> negative (conf: 97.81%)</p>
+                <p><span class="label">Top-k Overlap:</span> 40.00%</p>
+                
+                <div class="method">
+                    <p><span class="label">IG Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">slow</span><span class="token top-token">-</span><span class="token top-token">very</span><span class="token top-token">,</span><span class="token top-token">slow</span>
+                    </div>
+                </div>
+                
+                <div class="method">
+                    <p><span class="label">DiET Top Tokens:</span></p>
+                    <div class="tokens">
+            <span class="token top-token">it</span><span class="token top-token">'</span><span class="token top-token">s</span><span class="token top-token">very</span><span class="token top-token">slow</span>
+                    </div>
+                </div>
+            </div>
+            </body></html>

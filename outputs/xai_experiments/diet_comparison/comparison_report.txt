@@ -1,0 +1,49 @@
+======================================================================
+XAI METHODS COMPARISON REPORT
+======================================================================
+
+Generated: 2025-12-13T08:10:03.381641
+Device: cuda
+
+--------------------------------------------------
+IMAGE CLASSIFICATION (CIFAR-10)
+--------------------------------------------------
+
+Model Accuracy:
+  Baseline: 88.51%
+  After DiET: 87.64%
+
+Pixel Perturbation Results:
+  GradCAM Mean Score: 0.3750
+  DiET Mean Score: 0.5000
+
+  ✓ DiET IMPROVES attribution by 0.1250
+  → DiET masks focus more on discriminative features
+
+--------------------------------------------------
+TEXT CLASSIFICATION (SST-2)
+--------------------------------------------------
+
+Model Accuracy:
+  BERT Baseline: 89.00%
+
+Token Attribution Comparison:
+  IG-DiET Top-k Overlap: 0.1933
+  Samples Compared: 10
+
+  → Methods identify different important tokens
+  → DiET may capture discriminative features IG misses
+
+======================================================================
+CONCLUSIONS
+======================================================================
+
+• For IMAGES: DiET provides more discriminative attributions
+  - Masks learned by DiET better preserve prediction-relevant features
+  - Recommended for applications requiring faithful explanations
+
+• For TEXT: DiET captures unique discriminative patterns
+  - Low overlap suggests DiET finds different important tokens
+  - May be valuable for sentiment-specific attributions
+
+======================================================================

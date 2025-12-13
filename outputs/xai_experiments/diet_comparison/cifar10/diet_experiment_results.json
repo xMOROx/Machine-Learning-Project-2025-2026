@@ -1,0 +1,53 @@
+{
+  "baseline": {
+    "final_test_acc": 88.51,
+    "loaded_from": "/home/patryk/programming/Machine-Learning-Project-2025-2026/outputs/xai_experiments/diet_comparison/cifar10/baseline_resnet.pth"
+  },
+  "diet": {
+    "history": [
+      {
+        "step": 0,
+        "mask_metrics": {
+          "loss": 0.1354889497756958,
+          "t1_faithfulness": 0.06896522607803345,
+          "t2_consistency": 0.06652372417449952,
+          "faithful_acc": 0.9658,
+          "masked_acc": 0.952
+        },
+        "model_test_acc": 88.24
+      },
+      {
+        "step": 1,
+        "mask_metrics": {
+          "loss": 0.1180682541847229,
+          "t1_faithfulness": 0.07775443382263184,
+          "t2_consistency": 0.04031381972432137,
+          "faithful_acc": 0.9752,
+          "masked_acc": 0.962
+        },
+        "model_test_acc": 87.64
+      }
+    ],
+    "final_test_acc": 87.64
+  },
+  "comparison": {
+    "gradcam": {
+      "perturbation_scores": {
+        "10": 0.375,
+        "20": 0.375,
+        "50": 0.375
+      },
+      "mean_score": 0.375
+    },
+    "diet": {
+      "perturbation_scores": {
+        "10": 0.25,
+        "20": 0.375,
+        "50": 0.875
+      },
+      "mean_score": 0.5
+    },
+    "improvement": 0.125
+  },
+  "total_time_seconds": 521.2428531646729
+}
