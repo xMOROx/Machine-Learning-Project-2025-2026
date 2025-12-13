@@ -12,6 +12,7 @@ print_usage() {
   echo "  download          Download datasets"
   echo "  diet              Run DiET pipeline"
   echo "  htp               Run How-to-Probe pipeline"
+  echo "  xai               Run XAI experiments (CIFAR-10 GradCAM, BERT IG)"
   echo "  all               Run everything (download + diet + htp)"
   echo ""
   echo "Download options:"
@@ -41,6 +42,11 @@ print_usage() {
   echo "  --skip-probe      Skip probing"
   echo "  --skip-eval       Skip evaluation"
   echo ""
+  echo "XAI options:"
+  echo "  --xai-exp         XAI experiment: all, cifar10, glue, compare (default: all)"
+  echo "  --model-type      CNN model type: simple, resnet (default: resnet)"
+  echo "  --skip-training   Skip training, use saved models"
+  echo ""
   echo "Common options:"
   echo "  --gpu             GPU device ID (default: ${GPU})"
   echo "  --gpus            Number of GPUs for distributed training (default: ${GPUS})"
@@ -54,6 +60,8 @@ print_usage() {
   echo "  $0 diet --dataset mnist --epochs 10"
   echo "  $0 diet --dataset mnist --low-vram"
   echo "  $0 htp --method dino --backbone resnet50"
+  echo "  $0 xai --xai-exp all --low-vram"
+  echo "  $0 xai --xai-exp cifar10 --epochs 5"
   echo "  $0 all --gpu 0"
 }
 
@@ -81,6 +89,9 @@ SKIP_DISTILL=false
 SKIP_PRETRAIN=false
 SKIP_PROBE=false
 SKIP_EVAL=false
+XAI_EXP="all"
+MODEL_TYPE="resnet"
+SKIP_TRAINING=false
 
 if [ $# -eq 0 ]; then
   print_usage
@@ -191,6 +202,18 @@ while [[ $# -gt 0 ]]; do
     ;;
   --skip-eval)
     SKIP_EVAL=true
+    shift
+    ;;
+  --xai-exp)
+    XAI_EXP="$2"
+    shift 2
+    ;;
+  --model-type)
+    MODEL_TYPE="$2"
+    shift 2
+    ;;
+  --skip-training)
+    SKIP_TRAINING=true
     shift
     ;;
   -h | --help)
@@ -347,6 +370,66 @@ cmd_htp() {
   log_success "How-to-Probe pipeline completed"
 }
 
+cmd_xai() {
+  log_info "=== Running XAI Experiments Pipeline ==="
+  log_info "Experiment: ${XAI_EXP}"
+  log_info "Model type: ${MODEL_TYPE}"
+  log_info "Epochs: ${EPOCHS}"
+  log_info "Batch size: ${BATCH_SIZE}"
+  log_info "GPU: ${GPU}"
+  if [ "${LOW_VRAM}" = true ]; then
+    log_info "Low VRAM mode: enabled"
+    XAI_LOW_VRAM_FLAG="--low-vram"
+  else
+    XAI_LOW_VRAM_FLAG=""
+  fi
+
+  XAI_SCRIPT="${SCRIPT_DIR}/xai_experiments/run_xai_experiments.py"
+  
+  if [ ! -f "${XAI_SCRIPT}" ]; then
+    log_error "XAI script not found: ${XAI_SCRIPT}"
+    exit 1
+  fi
+
+  XAI_FLAGS=""
+  case ${XAI_EXP} in
+    all)
+      XAI_FLAGS="--all"
+      ;;
+    cifar10)
+      XAI_FLAGS="--cifar10"
+      ;;
+    glue)
+      XAI_FLAGS="--glue"
+      ;;
+    compare)
+      XAI_FLAGS="--compare"
+      ;;
+    *)
+      log_error "Unknown XAI experiment: ${XAI_EXP}"
+      exit 1
+      ;;
+  esac
+
+  SKIP_TRAINING_FLAG=""
+  if [ "${SKIP_TRAINING}" = true ]; then
+    SKIP_TRAINING_FLAG="--skip-training"
+  fi
+
+  run_cmd python3 "${XAI_SCRIPT}" \
+    ${XAI_FLAGS} \
+    --data-dir "${DATA_DIR}" \
+    --output-dir "${OUTPUTS_DIR}/xai_experiments" \
+    --model-type "${MODEL_TYPE}" \
+    --gpu "${GPU}" \
+    --epochs "${EPOCHS}" \
+    --batch-size "${BATCH_SIZE}" \
+    ${XAI_LOW_VRAM_FLAG} \
+    ${SKIP_TRAINING_FLAG}
+
+  log_success "XAI experiments completed"
+}
+
 cmd_all() {
   log_info "=== Running Full Pipeline ==="
 
@@ -371,6 +454,9 @@ diet)
   ;;
 htp)
   cmd_htp
+  ;;
+xai)
+  cmd_xai
   ;;
 all)
   cmd_all
