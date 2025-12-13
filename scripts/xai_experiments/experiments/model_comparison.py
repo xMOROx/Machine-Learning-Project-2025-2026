@@ -290,8 +290,7 @@ class ModelComparison:
             max_iter=max_iter,
             n_jobs=-1,
             random_state=42,
-            solver='saga',
-            multi_class='multinomial'
+            solver='saga'
         )
         
         model.fit(self.X_train, self.y_train)
