@@ -248,6 +248,10 @@ class XAIMethodsComparison:
                 return obj.tolist()
             elif isinstance(obj, (np.float32, np.float64)):
                 return float(obj)
+            elif isinstance(obj, (np.int32, np.int64)):
+                return int(obj)
+            elif isinstance(obj, (bool, np.bool_)):
+                return bool(obj)
             elif isinstance(obj, dict):
                 return {k: make_serializable(v) for k, v in obj.items()}
             elif isinstance(obj, list):

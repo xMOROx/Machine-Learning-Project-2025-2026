@@ -539,12 +539,31 @@ class DiETTextExperiment:
                     text, self.diet_token_mask, sample_idx
                 )
                 
-                # Compute overlap/agreement metrics
-                # Find top-k tokens for each method
-                k = min(5, len(tokens) // 2)
+                # Filter out special tokens for top-k selection
+                special_tokens = {'[PAD]', '[CLS]', '[SEP]', '[UNK]', '<pad>', '<s>', '</s>'}
                 
-                ig_top_k = set(np.argsort(np.abs(ig_attrs))[-k:])
-                diet_top_k = set(np.argsort(diet_attrs[:len(ig_attrs)])[-k:])
+                # Get indices of non-special tokens for IG
+                valid_ig_indices = [j for j, t in enumerate(tokens) if t not in special_tokens]
+                # Get indices of non-special tokens for DiET
+                valid_diet_indices = [j for j, t in enumerate(diet_tokens) if t not in special_tokens and j < len(diet_attrs)]
+                
+                # Skip if no valid tokens
+                if not valid_ig_indices or not valid_diet_indices:
+                    print(f"  Sample {i}: No valid tokens, skipping")
+                    continue
+                
+                # Compute overlap/agreement metrics
+                # Find top-k tokens for each method (only from valid tokens)
+                k = max(1, min(5, len(valid_ig_indices) // 2))
+                
+                # Get top-k from valid tokens only
+                ig_attrs_valid = [(j, np.abs(ig_attrs[j])) for j in valid_ig_indices if j < len(ig_attrs)]
+                ig_attrs_valid.sort(key=lambda x: x[1], reverse=True)
+                ig_top_k = set([x[0] for x in ig_attrs_valid[:k]])
+                
+                diet_attrs_valid = [(j, diet_attrs[j]) for j in valid_diet_indices]
+                diet_attrs_valid.sort(key=lambda x: x[1], reverse=True)
+                diet_top_k = set([x[0] for x in diet_attrs_valid[:k]])
                 
                 overlap = len(ig_top_k & diet_top_k) / k
                 
