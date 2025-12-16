@@ -28,7 +28,7 @@ This project is a reproduction and comparative analysis of the following papers:
 
 ## 3. Setup & Installation
 
-This project uses Python `venv` for environment management and `pip` for package installation.
+This project uses Python `uv` to manage venvs and dependencies.
 
 ### Step 1: Clone This Repository
 
@@ -41,24 +41,10 @@ cd Machine-Learning-Project-2025-2026
 
 ```bash
 # Create the virtual environment
-python -m venv .venv
-
-# Activate the environment
-# On macOS / Linux:
-source .venv/bin/activate
-# On Windows (PowerShell):
-# .\.venv\Scripts\Activate.ps1
+uv venv
 ```
 
-### Step 3: Install PyTorch
-
-Follow the instructions on the [PyTorch website](https://pytorch.org/get-started/locally/) to install the appropriate version for your system. For example, for CUDA 11.8, you can run:
-
-```bash
-pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
-```
-
-### Step 4: Clone Required Project Repositories
+### Step 3: Clone Required Project Repositories
 
 ```bash
 git submodule update --init --recursive
@@ -67,13 +53,7 @@ git submodule update --init --recursive
 ### Step 5: Install Project Dependencies
 
 ```bash
-pip install -r requirements.txt
-```
-
-### Step 6: Verify Installation
-
-```bash
-python scripts/verify.py
+uv sync
 ```
 
 ## 4. Data Download
@@ -84,7 +64,7 @@ bash scripts/download_project_data.sh --all
 
 ## 5. XAI Experiments
 
-The project includes comprehensive XAI (Explainable AI) experiments with multiple models and explanation methods optimized for RTX 3060 (12GB VRAM).
+The project includes comprehensive XAI (Explainable AI) experiments with multiple models and explanation methods optimized for low ram gpus.
 
 ### 5.1 Available Experiments
 
@@ -113,7 +93,7 @@ The project includes comprehensive XAI (Explainable AI) experiments with multipl
 ./scripts/run.sh xai --xai-exp compare
 ```
 
-**For RTX 3060 or low VRAM GPUs:**
+**For low VRAM GPUs:**
 ```bash
 ./scripts/run.sh xai --xai-exp all --low-vram
 ```
