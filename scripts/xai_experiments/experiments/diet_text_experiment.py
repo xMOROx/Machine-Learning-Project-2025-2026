@@ -18,6 +18,9 @@ from torch.utils.data import DataLoader, Dataset
 import numpy as np
 from typing import Dict, Any, Tuple, List
 from tqdm import tqdm
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 
 class TokenMaskDataset(Dataset):
@@ -192,12 +195,46 @@ class DiETTextExplainer:
 
 
 class DiETTextExperiment:
-    """DiET experiment for text classification (SST-2) with BERT.
+    """DiET experiment for text classification with BERT.
 
     Compares DiET token attributions with Integrated Gradients.
+    Supports multiple datasets and robust evaluation metrics.
     """
 
-    SST2_LABELS = ["negative", "positive"]
+    DATASET_CONFIGS = {
+        "sst2": {
+            "loader": "glue",
+            "name": "sst2",
+            "text_col": "sentence",
+            "label_col": "label",
+            "num_labels": 2,
+            "labels": ["negative", "positive"]
+        },
+        "imdb": {
+            "loader": "imdb",
+            "name": None,
+            "text_col": "text",
+            "label_col": "label",
+            "num_labels": 2,
+            "labels": ["negative", "positive"]
+        },
+        "ag_news": {
+            "loader": "ag_news",
+            "name": None,
+            "text_col": "text",
+            "label_col": "label",
+            "num_labels": 4,
+            "labels": ["World", "Sports", "Business", "Sci/Tech"]
+        },
+        "yelp_review_full": {
+            "loader": "yelp_review_full",
+            "name": None,
+            "text_col": "text",
+            "label_col": "label",
+            "num_labels": 5,
+            "labels": ["1 star", "2 stars", "3 stars", "4 stars", "5 stars"]
+        }
+    }
 
     def __init__(self, config: Dict[str, Any]):
         """Initialize DiET text experiment.
@@ -210,9 +247,16 @@ class DiETTextExperiment:
             "device", "cuda" if torch.cuda.is_available() else "cpu"
         )
 
-        self.data_dir = config.get("data_dir", "./data/glue_sst2")
+        self.dataset_name = config.get("dataset_name", "sst2")
+        if self.dataset_name not in self.DATASET_CONFIGS:
+             print(f"Dataset {self.dataset_name} not found, defaulting to sst2")
+             self.dataset_name = "sst2"
+
+        self.ds_config = self.DATASET_CONFIGS[self.dataset_name]
+
+        self.data_dir = config.get("data_dir", f"./data/{self.dataset_name}")
         self.output_dir = config.get(
-            "output_dir", "./outputs/xai_experiments/diet_text"
+            "output_dir", f"./outputs/xai_experiments/diet_{self.dataset_name}"
         )
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -242,29 +286,40 @@ class DiETTextExperiment:
                 from models.transformer import BertForSequenceClassificationWithIG
 
             self.model = BertForSequenceClassificationWithIG(
-                model_name=self.model_name, num_labels=2, device=self.device
+                model_name=self.model_name,
+                num_labels=self.ds_config["num_labels"],
+                device=self.device
             )
 
     def prepare_data(self, max_samples: int = 2000) -> None:
-        """Prepare SST-2 data.
+        """Prepare data.
 
         Args:
             max_samples: Maximum training samples
         """
-        print("Loading SST-2 dataset...")
+        print(f"Loading {self.dataset_name} dataset...")
         from datasets import load_dataset
 
-        dataset = load_dataset("glue", "sst2", cache_dir=self.data_dir)
+        if self.ds_config["loader"] == "glue":
+            dataset = load_dataset("glue", self.ds_config["name"], cache_dir=self.data_dir)
+        else:
+             dataset = load_dataset(self.ds_config["loader"], cache_dir=self.data_dir)
+
         self._init_model()
 
-        train_texts = dataset["train"]["sentence"][:max_samples]
-        train_labels = dataset["train"]["label"][:max_samples]
+        text_col = self.ds_config["text_col"]
+        label_col = self.ds_config["label_col"]
+
+        train_texts = dataset["train"][text_col][:max_samples]
+        train_labels = dataset["train"][label_col][:max_samples]
 
         print("Tokenizing training data...")
         train_input_ids = []
         train_attention_masks = []
 
         for text in tqdm(train_texts, desc="Tokenizing"):
+            # Ensure text is string (IMDB sometimes has issues)
+            text = str(text)
             input_ids, attn_mask = self.model.encode_text(text, self.max_length)
             train_input_ids.append(input_ids.squeeze(0))
             train_attention_masks.append(attn_mask.squeeze(0))
@@ -273,8 +328,11 @@ class DiETTextExperiment:
         self.train_attention_mask = torch.stack(train_attention_masks)
         self.train_labels = torch.tensor(train_labels)
 
-        self.test_texts = dataset["validation"]["sentence"][:200]
-        self.test_labels = dataset["validation"]["label"][:200]
+        # Validation set handling
+        split_name = "validation" if "validation" in dataset else "test"
+
+        self.test_texts = [str(t) for t in dataset[split_name][text_col][:200]]
+        self.test_labels = dataset[split_name][label_col][:200]
 
         print(f"Training samples: {len(self.train_labels)}")
         print(f"Test samples: {len(self.test_texts)}")
@@ -472,11 +530,12 @@ class DiETTextExperiment:
 
         return self.results["diet"]
 
-    def compare_with_ig(self, num_samples: int = 10) -> Dict[str, Any]:
+    def compare_with_ig(self, num_samples: int = 10, top_k: int = 10) -> Dict[str, Any]:
         """Compare DiET with Integrated Gradients.
 
         Args:
             num_samples: Number of samples for comparison
+            top_k: Number of top tokens to compare
 
         Returns:
             Comparison results
@@ -499,6 +558,11 @@ class DiETTextExperiment:
         diet = DiETTextExplainer(self.model, self.device, self.max_length)
 
         comparison_results = []
+
+        sufficiencies_ig = []
+        comprehensiveness_ig = []
+        sufficiencies_diet = []
+        comprehensiveness_diet = []
 
         for i in tqdm(range(num_samples), desc="Comparing methods"):
             text = self.test_texts[i]
@@ -538,7 +602,8 @@ class DiETTextExperiment:
                     print(f"  Sample {i}: No valid tokens, skipping")
                     continue
 
-                k = max(1, min(5, len(valid_ig_indices) // 2))
+                # Top-k comparison
+                k = max(1, min(top_k, len(valid_ig_indices)))
 
                 ig_attrs_valid = [
                     (j, np.abs(ig_attrs[j]))
@@ -546,13 +611,27 @@ class DiETTextExperiment:
                     if j < len(ig_attrs)
                 ]
                 ig_attrs_valid.sort(key=lambda x: x[1], reverse=True)
-                ig_top_k = set([x[0] for x in ig_attrs_valid[:k]])
+                ig_top_k_indices = [x[0] for x in ig_attrs_valid[:k]]
+                ig_top_k_set = set(ig_top_k_indices)
 
                 diet_attrs_valid = [(j, diet_attrs[j]) for j in valid_diet_indices]
                 diet_attrs_valid.sort(key=lambda x: x[1], reverse=True)
-                diet_top_k = set([x[0] for x in diet_attrs_valid[:k]])
+                diet_top_k_indices = [x[0] for x in diet_attrs_valid[:k]]
+                diet_top_k_set = set(diet_top_k_indices)
 
-                overlap = len(ig_top_k & diet_top_k) / k
+                overlap = len(ig_top_k_set & diet_top_k_set) / k
+
+                # Metrics Calculation
+                s_ig = self._calculate_sufficiency(text, ig_top_k_indices)
+                c_ig = self._calculate_comprehensiveness(text, ig_top_k_indices, pred_class)
+
+                s_diet = self._calculate_sufficiency(text, diet_top_k_indices)
+                c_diet = self._calculate_comprehensiveness(text, diet_top_k_indices, pred_class)
+
+                sufficiencies_ig.append(s_ig)
+                comprehensiveness_ig.append(c_ig)
+                sufficiencies_diet.append(s_diet)
+                comprehensiveness_diet.append(c_diet)
 
                 comparison_results.append(
                     {
@@ -562,35 +641,164 @@ class DiETTextExperiment:
                         "confidence": confidence,
                         "top_k_overlap": overlap,
                         "ig_top_tokens": [
-                            tokens[j] for j in ig_top_k if j < len(tokens)
+                            tokens[j] for j in ig_top_k_set if j < len(tokens)
                         ],
                         "diet_top_tokens": [
-                            diet_tokens[j] for j in diet_top_k if j < len(diet_tokens)
+                            diet_tokens[j] for j in diet_top_k_set if j < len(diet_tokens)
                         ],
                     }
                 )
 
             except Exception as e:
                 print(f"Error on sample {i}: {e}")
+                # import traceback
+                # traceback.print_exc()
                 continue
 
-        mean_overlap = np.mean([r["top_k_overlap"] for r in comparison_results])
+        mean_overlap = np.mean([r["top_k_overlap"] for r in comparison_results]) if comparison_results else 0
+
+        metrics_summary = {
+            "ig": {
+                "sufficiency": np.mean(sufficiencies_ig) if sufficiencies_ig else 0,
+                "comprehensiveness": np.mean(comprehensiveness_ig) if comprehensiveness_ig else 0
+            },
+            "diet": {
+                "sufficiency": np.mean(sufficiencies_diet) if sufficiencies_diet else 0,
+                "comprehensiveness": np.mean(comprehensiveness_diet) if comprehensiveness_diet else 0
+            }
+        }
 
         comparison = {
             "samples": comparison_results,
             "mean_top_k_overlap": mean_overlap,
             "num_samples": len(comparison_results),
+            "metrics": metrics_summary
         }
 
         self.results["comparison"] = comparison
 
         print("\nComparison Results:")
-        print(f"  Mean top-k token overlap: {mean_overlap:.4f}")
-        print("  (1.0 = perfect agreement, 0.0 = no overlap)")
+        print(f"  Mean top-{top_k} token overlap: {mean_overlap:.4f}")
+        print("\nRobust Metrics:")
+        print(f"  IG Sufficiency (Lower is better): {metrics_summary['ig']['sufficiency']:.4f}")
+        print(f"  DiET Sufficiency (Lower is better): {metrics_summary['diet']['sufficiency']:.4f}")
+        print(f"  IG Comprehensiveness (Higher is better): {metrics_summary['ig']['comprehensiveness']:.4f}")
+        print(f"  DiET Comprehensiveness (Higher is better): {metrics_summary['diet']['comprehensiveness']:.4f}")
 
         self._save_text_comparison(comparison_results[:5])
+        self._plot_metrics(metrics_summary)
 
         return comparison
+
+    def _calculate_sufficiency(self, text: str, keep_indices: List[int]) -> float:
+        """Calculate sufficiency metric (Prediction confidence when keeping only top tokens).
+
+        Sufficiency = Prob(Full) - Prob(Kept). We want this to be low (meaning Kept is sufficient).
+        """
+        self.model.eval_mode()
+        input_ids, attn_mask = self.model.encode_text(text, self.max_length)
+        input_ids = input_ids.to(self.device)
+        attn_mask = attn_mask.to(self.device)
+
+        # Original pred
+        with torch.no_grad():
+            full_output = self.model(input_ids, attn_mask)
+            full_probs = F.softmax(full_output, dim=1)
+            pred_class = full_probs.argmax(1).item()
+            full_prob = full_probs[0, pred_class].item()
+
+        # Create mask for keeping only top tokens
+        # We can't really "mask" tokens with 0 in BERT as it changes meaning (PAD), but we can mask attention
+        # However, a common way is to zero out embeddings of non-important tokens.
+        # But here we are operating on input_ids.
+        # Let's try to set non-kept tokens to PAD (0).
+
+        # Create a new input_ids tensor
+        kept_input_ids = torch.zeros_like(input_ids) # Assuming 0 is PAD
+
+        # We need to keep CLS (0) and SEP usually, but let's stick to indices provided
+        # The indices are from the full sequence including special tokens
+
+        for idx in keep_indices:
+            if idx < kept_input_ids.size(1):
+                kept_input_ids[0, idx] = input_ids[0, idx]
+
+        with torch.no_grad():
+            # We use the original attention mask or should we modify it?
+            # If we set tokens to PAD, we should probably mask them in attention too.
+            kept_output = self.model(kept_input_ids, attn_mask)
+            kept_probs = F.softmax(kept_output, dim=1)
+            kept_prob = kept_probs[0, pred_class].item()
+
+        return max(0, full_prob - kept_prob)
+
+    def _calculate_comprehensiveness(self, text: str, remove_indices: List[int], target_class: int) -> float:
+        """Calculate comprehensiveness metric (Prediction drop when removing top tokens).
+
+        Comprehensiveness = Prob(Full) - Prob(Removed). We want this to be high.
+        """
+        self.model.eval_mode()
+        input_ids, attn_mask = self.model.encode_text(text, self.max_length)
+        input_ids = input_ids.to(self.device)
+        attn_mask = attn_mask.to(self.device)
+
+        with torch.no_grad():
+            full_output = self.model(input_ids, attn_mask)
+            full_probs = F.softmax(full_output, dim=1)
+            full_prob = full_probs[0, target_class].item()
+
+        # Create input_ids with removed tokens set to PAD
+        removed_input_ids = input_ids.clone()
+        for idx in remove_indices:
+            if idx < removed_input_ids.size(1):
+                removed_input_ids[0, idx] = 0 # PAD
+
+        with torch.no_grad():
+            removed_output = self.model(removed_input_ids, attn_mask)
+            removed_probs = F.softmax(removed_output, dim=1)
+            removed_prob = removed_probs[0, target_class].item()
+
+        return max(0, full_prob - removed_prob)
+
+    def _plot_metrics(self, metrics: Dict[str, Dict[str, float]]) -> None:
+        """Plot and save metrics visualization."""
+        viz_dir = os.path.join(self.output_dir, "comparison_visualizations")
+        os.makedirs(viz_dir, exist_ok=True)
+
+        labels = ['Sufficiency\n(Lower better)', 'Comprehensiveness\n(Higher better)']
+        ig_scores = [metrics['ig']['sufficiency'], metrics['ig']['comprehensiveness']]
+        diet_scores = [metrics['diet']['sufficiency'], metrics['diet']['comprehensiveness']]
+
+        x = np.arange(len(labels))
+        width = 0.35
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        rects1 = ax.bar(x - width/2, ig_scores, width, label='Integrated Gradients', color='#FF9800', alpha=0.8)
+        rects2 = ax.bar(x + width/2, diet_scores, width, label='DiET', color='#2196F3', alpha=0.8)
+
+        ax.set_ylabel('Score')
+        ax.set_title(f'Robustness Metrics Comparison ({self.dataset_name})')
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels)
+        ax.legend()
+        ax.grid(axis='y', linestyle='--', alpha=0.3)
+
+        def autolabel(rects):
+            for rect in rects:
+                height = rect.get_height()
+                ax.annotate(f'{height:.3f}',
+                            xy=(rect.get_x() + rect.get_width() / 2, height),
+                            xytext=(0, 3),
+                            textcoords="offset points",
+                            ha='center', va='bottom')
+
+        autolabel(rects1)
+        autolabel(rects2)
+
+        fig.tight_layout()
+        plt.savefig(os.path.join(viz_dir, "metrics_comparison.png"), dpi=150)
+        plt.close()
+        print(f"Metrics visualization saved to {viz_dir}/metrics_comparison.png")
 
     def _save_text_comparison(self, samples: List[Dict]) -> None:
         """Save text comparison visualizations."""
@@ -602,12 +810,12 @@ class DiETTextExperiment:
         <head>
             <style>
                 body { font-family: Arial, sans-serif; padding: 20px; }
-                .sample { margin-bottom: 30px; border-bottom: 1px solid 
+                .sample { margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 20px; }
                 .method { margin: 10px 0; }
                 .label { font-weight: bold; }
                 .tokens { display: flex; flex-wrap: wrap; gap: 5px; }
-                .token { background: 
-                .top-token { background: 
+                .token { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; }
+                .top-token { background: #ffeb3b; font-weight: bold; }
             </style>
         </head>
         <body>
@@ -615,8 +823,21 @@ class DiETTextExperiment:
         """
 
         for i, sample in enumerate(samples):
-            label_name = self.SST2_LABELS[sample["true_label"]]
-            pred_name = self.SST2_LABELS[sample["pred_class"]]
+            # Handle labels safely
+            try:
+                true_label_idx = sample["true_label"]
+                pred_label_idx = sample["pred_class"]
+
+                label_name = str(true_label_idx)
+                if true_label_idx < len(self.ds_config["labels"]):
+                    label_name = self.ds_config["labels"][true_label_idx]
+
+                pred_name = str(pred_label_idx)
+                if pred_label_idx < len(self.ds_config["labels"]):
+                    pred_name = self.ds_config["labels"][pred_label_idx]
+            except:
+                label_name = str(sample["true_label"])
+                pred_name = str(sample["pred_class"])
 
             html += f"""
             <div class="sample">
@@ -666,7 +887,7 @@ class DiETTextExperiment:
             All results
         """
         print("=" * 60)
-        print("DiET Text Experiment: Token Attribution")
+        print(f"DiET Text Experiment: {self.dataset_name}")
         print("=" * 60)
 
         start_time = time.time()
@@ -692,7 +913,8 @@ class DiETTextExperiment:
 
         print("\n[Step 4/4] Comparing DiET vs IG...")
         comparison_samples = self.config.get("comparison_samples", 10)
-        self.compare_with_ig(comparison_samples)
+        top_k = self.config.get("top_k", 10)
+        self.compare_with_ig(comparison_samples, top_k)
 
         total_time = time.time() - start_time
         self.results["total_time_seconds"] = total_time

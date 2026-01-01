@@ -22,6 +22,7 @@ import torchvision.transforms as transforms
 import numpy as np
 from typing import Dict, Any, List
 from tqdm import tqdm
+from scipy.stats import pearsonr
 
 
 import matplotlib
@@ -41,7 +42,7 @@ except ImportError:
 
 
 class CIFAR10DatasetWithPreds(Dataset):
-    """CIFAR-10 Dataset with model predictions for DiET training."""
+    """Dataset with model predictions for DiET training."""
 
     def __init__(
         self, images: torch.Tensor, labels: torch.Tensor, predictions: torch.Tensor
@@ -116,18 +117,17 @@ class DiETExplainer:
 
         return torch.cat(predictions, dim=0)
 
-    def _get_background(self, batch_size: int) -> torch.Tensor:
+    def _get_background(self, batch_size: int, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
         """Generate random background for masked regions.
 
         Args:
             batch_size: Number of samples
 
         Returns:
-            Background tensor for CIFAR-10 (N, 3, 1, 1)
+            Background tensor (N, 3, 1, 1)
         """
-
-        means = torch.ones((batch_size, 3)) * torch.tensor([0.4914, 0.4822, 0.4465])
-        stds = torch.ones((batch_size, 3)) * torch.tensor([0.2023, 0.1994, 0.2010])
+        means = torch.ones((batch_size, 3)) * mean
+        stds = torch.ones((batch_size, 3)) * std
         background = torch.normal(mean=means, std=stds)
         background = background.unsqueeze(2).unsqueeze(3).clamp(0, 1)
         return background.to(self.device)
@@ -138,6 +138,8 @@ class DiETExplainer:
         data_loader: DataLoader,
         mask_optimizer: optim.Optimizer,
         sparsity_weight: float,
+        mean: torch.Tensor,
+        std: torch.Tensor
     ) -> Dict[str, float]:
         """Train the mask for one epoch.
 
@@ -168,7 +170,7 @@ class DiETExplainer:
 
             batch_mask = self.upsample(mask[idx]).to(self.device)
 
-            background = self._get_background(len(idx))
+            background = self._get_background(len(idx), mean, std)
 
             pred_full = F.softmax(self.model(images), dim=1)
 
@@ -219,6 +221,8 @@ class DiETExplainer:
         mask: torch.Tensor,
         data_loader: DataLoader,
         model_optimizer: optim.Optimizer,
+        mean: torch.Tensor,
+        std: torch.Tensor
     ) -> Dict[str, float]:
         """Fine-tune the model with DiET objective.
 
@@ -246,7 +250,7 @@ class DiETExplainer:
             labels = labels.to(self.device)
 
             batch_mask = self.upsample(mask[idx]).to(self.device)
-            background = self._get_background(len(idx))
+            background = self._get_background(len(idx), mean, std)
 
             pred_full = F.softmax(self.model(images), dim=1)
             masked_images = batch_mask * images + (1 - batch_mask) * background
@@ -299,27 +303,55 @@ class DiETExplainer:
 
 
 class DiETExperiment:
-    """DiET Experiment for CIFAR-10 with comparison to basic XAI methods.
+    """DiET Experiment for various datasets with comparison to basic XAI methods.
 
     This experiment:
-    1. Trains a baseline model on CIFAR-10
+    1. Trains a baseline model on selected dataset
     2. Applies DiET to learn discriminative masks
     3. Compares DiET attributions with GradCAM
-    4. Evaluates using pixel perturbation and faithfulness metrics
+    4. Evaluates using robust metrics
     """
 
-    CIFAR10_CLASSES = [
-        "airplane",
-        "automobile",
-        "bird",
-        "cat",
-        "deer",
-        "dog",
-        "frog",
-        "horse",
-        "ship",
-        "truck",
-    ]
+    DATASET_CONFIGS = {
+        "cifar10": {
+            "class": torchvision.datasets.CIFAR10,
+            "num_classes": 10,
+            "channels": 3,
+            "mean": (0.4914, 0.4822, 0.4465),
+            "std": (0.2023, 0.1994, 0.2010),
+            "classes": [
+                "airplane", "automobile", "bird", "cat", "deer",
+                "dog", "frog", "horse", "ship", "truck"
+            ]
+        },
+        "cifar100": {
+            "class": torchvision.datasets.CIFAR100,
+            "num_classes": 100,
+            "channels": 3,
+            "mean": (0.5071, 0.4867, 0.4408),
+            "std": (0.2675, 0.2565, 0.2761),
+            "classes": None # Too many to list
+        },
+        "fashion_mnist": {
+            "class": torchvision.datasets.FashionMNIST,
+            "num_classes": 10,
+            "channels": 1,
+            "mean": (0.2860, 0.2860, 0.2860), # Duplicate for 3 channels
+            "std": (0.3530, 0.3530, 0.3530),
+            "classes": [
+                "T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
+                "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot"
+            ]
+        },
+        "mnist": {
+            "class": torchvision.datasets.MNIST,
+            "num_classes": 10,
+            "channels": 1,
+            "mean": (0.1307, 0.1307, 0.1307),
+            "std": (0.3081, 0.3081, 0.3081),
+            "classes": [str(i) for i in range(10)]
+        }
+    }
 
     def __init__(self, config: Dict[str, Any]):
         """Initialize DiET experiment.
@@ -332,15 +364,26 @@ class DiETExperiment:
             "device", "cuda" if torch.cuda.is_available() else "cpu"
         )
 
-        self.data_dir = config.get("data_dir", "./data/cifar10")
-        self.output_dir = config.get("output_dir", "./outputs/xai_experiments/diet")
+        self.dataset_name = config.get("dataset_name", "cifar10")
+        if self.dataset_name not in self.DATASET_CONFIGS:
+            print(f"Dataset {self.dataset_name} not found, defaulting to cifar10")
+            self.dataset_name = "cifar10"
+
+        self.ds_config = self.DATASET_CONFIGS[self.dataset_name]
+        self.num_classes = self.ds_config["num_classes"]
+
+        self.data_dir = config.get("data_dir", f"./data/{self.dataset_name}")
+        self.output_dir = config.get("output_dir", f"./outputs/xai_experiments/diet_{self.dataset_name}")
         os.makedirs(self.output_dir, exist_ok=True)
 
         model_type = config.get("model_type", "resnet")
+
+        # We enforce 3 channels for all models for compatibility
         if model_type == "simple":
-            self.model = SimpleCNN(num_classes=10).to(self.device)
+            self.model = SimpleCNN(num_classes=self.num_classes).to(self.device)
         else:
-            self.model = ResNetCIFAR(num_classes=10, pretrained=True).to(self.device)
+            # ResNetCIFAR expects 3 input channels
+            self.model = ResNetCIFAR(num_classes=self.num_classes, pretrained=True).to(self.device)
 
         self.model_type = model_type
 
@@ -359,24 +402,28 @@ class DiETExperiment:
         self.results = {}
 
     def prepare_data(self, max_samples: int = 5000) -> None:
-        """Prepare CIFAR-10 data.
+        """Prepare data.
 
         Args:
             max_samples: Maximum samples for DiET training (memory constraint)
         """
-        transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Normalize(
-                    (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
-                ),
-            ]
-        )
+        transforms_list = [transforms.Resize((32, 32))]
 
-        train_dataset = torchvision.datasets.CIFAR10(
+        if self.ds_config["channels"] == 1:
+            transforms_list.append(transforms.Grayscale(num_output_channels=3))
+
+        transforms_list.extend([
+            transforms.ToTensor(),
+            transforms.Normalize(self.ds_config["mean"], self.ds_config["std"])
+        ])
+
+        transform = transforms.Compose(transforms_list)
+
+        print(f"Downloading {self.dataset_name}...")
+        train_dataset = self.ds_config["class"](
             root=self.data_dir, train=True, download=True, transform=transform
         )
-        test_dataset = torchvision.datasets.CIFAR10(
+        test_dataset = self.ds_config["class"](
             root=self.data_dir, train=False, download=True, transform=transform
         )
 
@@ -414,7 +461,7 @@ class DiETExperiment:
         print(f"Test samples (DiET): {len(self.test_images)}")
 
     def train_baseline(self, epochs: int = 5) -> Dict[str, Any]:
-        """Train baseline model on CIFAR-10.
+        """Train baseline model.
 
         Args:
             epochs: Number of training epochs
@@ -422,7 +469,7 @@ class DiETExperiment:
         Returns:
             Training history
         """
-        print(f"\nTraining baseline {self.model_type} model...")
+        print(f"\nTraining baseline {self.model_type} model on {self.dataset_name}...")
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(self.model.parameters(), lr=0.001)
@@ -558,11 +605,6 @@ class DiETExperiment:
         )
         diet_loader = DataLoader(diet_dataset, batch_size=64, shuffle=True)
 
-        test_diet_dataset = CIFAR10DatasetWithPreds(
-            self.test_images, self.test_labels, test_preds
-        )
-        test_diet_loader = DataLoader(test_diet_dataset, batch_size=128, shuffle=False)
-
         mask_size = 32 // self.upsample_factor
         mask = torch.ones(
             (len(train_preds), 1, mask_size, mask_size), requires_grad=True
@@ -579,6 +621,9 @@ class DiETExperiment:
 
         diet_history = []
 
+        mean_tensor = torch.tensor(self.ds_config["mean"])
+        std_tensor = torch.tensor(self.ds_config["std"])
+
         for step in range(self.rounding_steps):
             print(f"\n--- DiET Step {step + 1}/{self.rounding_steps} ---")
 
@@ -586,7 +631,8 @@ class DiETExperiment:
             prev_loss = float("inf")
             for i in range(50):
                 metrics = diet.train_mask(
-                    mask, diet_loader, mask_optimizer, sparsity_weights[step]
+                    mask, diet_loader, mask_optimizer, sparsity_weights[step],
+                    mean_tensor, std_tensor
                 )
 
                 if abs(metrics["loss"] - prev_loss) < 0.001:
@@ -607,7 +653,7 @@ class DiETExperiment:
             print("Training model...")
             prev_loss = float("inf")
             for i in range(30):
-                metrics = diet.train_model(mask, diet_loader, model_optimizer)
+                metrics = diet.train_model(mask, diet_loader, model_optimizer, mean_tensor, std_tensor)
 
                 if metrics["loss"] < 0.025 or abs(metrics["loss"] - prev_loss) < 0.001:
                     break
@@ -693,14 +739,25 @@ class DiETExperiment:
         gradcam_scores = self._pixel_perturbation_test(gradcam_maps, indices)
         diet_scores = self._pixel_perturbation_test(diet_maps, indices)
 
+        # New Robust Metrics
+        gradcam_faithfulness = self._faithfulness_metric(gradcam_maps, indices)
+        diet_faithfulness = self._faithfulness_metric(diet_maps, indices)
+
+        gradcam_complexity = self._complexity_metric(gradcam_maps)
+        diet_complexity = self._complexity_metric(diet_maps)
+
         comparison = {
             "gradcam": {
                 "perturbation_scores": gradcam_scores,
                 "mean_score": np.mean(list(gradcam_scores.values())),
+                "faithfulness": gradcam_faithfulness,
+                "complexity": gradcam_complexity
             },
             "diet": {
                 "perturbation_scores": diet_scores,
                 "mean_score": np.mean(list(diet_scores.values())),
+                "faithfulness": diet_faithfulness,
+                "complexity": diet_complexity
             },
             "improvement": np.mean(list(diet_scores.values()))
             - np.mean(list(gradcam_scores.values())),
@@ -710,10 +767,12 @@ class DiETExperiment:
 
         self.results["comparison"] = comparison
 
-        print(f"\nPixel Perturbation Results:")
+        print(f"\nResults:")
         print(f"  GradCAM mean score: {comparison['gradcam']['mean_score']:.4f}")
         print(f"  DiET mean score: {comparison['diet']['mean_score']:.4f}")
         print(f"  Improvement: {comparison['improvement']:.4f}")
+        print(f"  GradCAM Faithfulness: {comparison['gradcam']['faithfulness']:.4f}")
+        print(f"  DiET Faithfulness: {comparison['diet']['faithfulness']:.4f}")
 
         return comparison
 
@@ -723,19 +782,7 @@ class DiETExperiment:
         indices: np.ndarray,
         percentages: List[int] = [10, 20, 50],
     ) -> Dict[int, float]:
-        """Evaluate attributions using pixel perturbation.
-
-        Keep top-k% pixels and measure accuracy.
-        Higher accuracy means better attribution (important pixels identified).
-
-        Args:
-            attribution_maps: List of attribution maps
-            indices: Sample indices
-            percentages: Percentages of pixels to keep
-
-        Returns:
-            Dictionary of percentage -> accuracy
-        """
+        """Evaluate attributions using pixel perturbation."""
         self.model.eval()
         results = {p: 0 for p in percentages}
 
@@ -768,6 +815,75 @@ class DiETExperiment:
 
         return results
 
+    def _faithfulness_metric(
+        self,
+        attribution_maps: List[np.ndarray],
+        indices: np.ndarray,
+        num_perturbations: int = 20
+    ) -> float:
+        """Calculate faithfulness (correlation between attribution and prediction drop)."""
+        self.model.eval()
+        correlations = []
+
+        with torch.no_grad():
+            for i, (attr_map, idx) in enumerate(zip(attribution_maps, indices)):
+                image = self.test_images[idx : idx + 1].to(self.device)
+
+                # Baseline prediction prob
+                logits = self.model(image)
+                probs = F.softmax(logits, dim=1)
+                pred_label = probs.argmax(1).item()
+                orig_prob = probs[0, pred_label].item()
+
+                attr_tensor = torch.tensor(attr_map).float()
+                if attr_tensor.dim() == 2:
+                    attr_tensor = attr_tensor.unsqueeze(0).unsqueeze(0)
+                attr_resized = F.interpolate(
+                    attr_tensor, size=(32, 32), mode="bilinear", align_corners=False
+                )
+                attr_resized = attr_resized.squeeze().to(self.device)
+
+                attr_sums = []
+                prob_drops = []
+
+                for _ in range(num_perturbations):
+                    # Random mask
+                    mask = (torch.rand((32, 32), device=self.device) > 0.5).float()
+
+                    # Sum of attribution in masked region
+                    # Note: we are masking OUT pixels, so we look at attributions of REMOVED pixels
+                    masked_attr_sum = (attr_resized * (1 - mask)).sum().item()
+
+                    masked_image = image * mask.unsqueeze(0).unsqueeze(0)
+                    masked_logits = self.model(masked_image)
+                    masked_probs = F.softmax(masked_logits, dim=1)
+                    masked_prob = masked_probs[0, pred_label].item()
+
+                    prob_drop = orig_prob - masked_prob
+
+                    attr_sums.append(masked_attr_sum)
+                    prob_drops.append(prob_drop)
+
+                if len(set(attr_sums)) > 1 and len(set(prob_drops)) > 1:
+                    corr, _ = pearsonr(attr_sums, prob_drops)
+                    if not np.isnan(corr):
+                        correlations.append(corr)
+
+        return np.mean(correlations) if correlations else 0.0
+
+    def _complexity_metric(self, attribution_maps: List[np.ndarray]) -> float:
+        """Calculate complexity (sparsity) of attributions.
+
+        Returns fraction of pixels with < 0.01 max attribution.
+        """
+        sparsities = []
+        for amap in attribution_maps:
+            if amap.max() > 0:
+                norm_map = amap / amap.max()
+                sparsity = (norm_map < 0.01).mean()
+                sparsities.append(sparsity)
+        return np.mean(sparsities) if sparsities else 0.0
+
     def _save_comparison_visualizations(
         self,
         indices: np.ndarray,
@@ -779,25 +895,32 @@ class DiETExperiment:
         viz_dir = os.path.join(self.output_dir, "comparison_visualizations")
         os.makedirs(viz_dir, exist_ok=True)
 
-        mean = torch.tensor([0.4914, 0.4822, 0.4465])
-        std = torch.tensor([0.2023, 0.1994, 0.2010])
+        mean_val = self.ds_config["mean"]
+        std_val = self.ds_config["std"]
+
+        mean = torch.tensor(mean_val)
+        std = torch.tensor(std_val)
 
         num_vis = min(max_vis, len(indices))
         fig, axes = plt.subplots(num_vis, 4, figsize=(16, 4 * num_vis))
+
+        classes = self.ds_config["classes"]
 
         for i in range(num_vis):
             idx = indices[i]
             img = self.test_images[idx].clone()
 
+            # Denormalize
             for c in range(3):
                 img[c] = img[c] * std[c] + mean[c]
             img = torch.clamp(img, 0, 1)
             img_np = img.permute(1, 2, 0).numpy()
 
             label = self.test_labels[idx].item()
+            label_name = classes[label] if classes else str(label)
 
             axes[i, 0].imshow(img_np)
-            axes[i, 0].set_title(f"Original: {self.CIFAR10_CLASSES[label]}")
+            axes[i, 0].set_title(f"Original: {label_name}")
             axes[i, 0].axis("off")
 
             axes[i, 1].imshow(img_np)
@@ -848,7 +971,7 @@ class DiETExperiment:
             All experiment results
         """
         print("=" * 60)
-        print("DiET Experiment: Discriminative Feature Attribution")
+        print(f"DiET Experiment: {self.dataset_name}")
         print("=" * 60)
 
         start_time = time.time()
@@ -903,17 +1026,19 @@ class DiETExperiment:
             f"Baseline Test Accuracy: {self.results['baseline']['final_test_acc']:.2f}%"
         )
         print(f"DiET Test Accuracy: {self.results['diet']['final_test_acc']:.2f}%")
-        print("\nPixel Perturbation Comparison:")
-        print(f"  GradCAM: {self.results['comparison']['gradcam']['mean_score']:.4f}")
-        print(f"  DiET: {self.results['comparison']['diet']['mean_score']:.4f}")
+        print("\nComparison Metrics:")
+        print(f"  GradCAM Faithfulness: {self.results['comparison']['gradcam']['faithfulness']:.4f}")
+        print(f"  DiET Faithfulness: {self.results['comparison']['diet']['faithfulness']:.4f}")
+        print(f"  GradCAM Complexity: {self.results['comparison']['gradcam']['complexity']:.4f}")
+        print(f"  DiET Complexity: {self.results['comparison']['diet']['complexity']:.4f}")
 
         improvement = self.results["comparison"]["improvement"]
         if improvement > 0:
             print(
-                f"\n✓ DiET shows {improvement:.4f} improvement in attribution quality!"
+                f"\n✓ DiET shows {improvement:.4f} improvement in perturbation score!"
             )
         else:
-            print(f"\n→ GradCAM performs {-improvement:.4f} better on this dataset")
+            print(f"\n→ GradCAM performs {-improvement:.4f} better on perturbation")
 
         print(f"\nTotal time: {total_time:.1f} seconds")
         print(f"Results saved to {results_path}")

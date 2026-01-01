@@ -245,6 +245,9 @@ def run_diet_experiment(
         "epochs_text": min(2, config.get("glue_epochs", 2)),
         "comparison_samples": config.get("gradcam_samples", 16),
         "comparison_samples_text": 10,
+        "dataset_name": args.dataset,
+        "text_dataset_name": args.text_dataset,
+        "top_k": args.top_k
     }
 
     comparison = XAIMethodsComparison(comparison_config)
@@ -273,6 +276,9 @@ Examples:
   python run_xai_experiments.py --diet                   # Run DiET comparison (images + text)
   python run_xai_experiments.py --diet --diet-images     # DiET for images only
   python run_xai_experiments.py --diet --diet-text       # DiET for text only
+  python run_xai_experiments.py --diet --dataset mnist   # DiET on MNIST
+  python run_xai_experiments.py --diet --text-dataset imdb # DiET on IMDB
+  python run_xai_experiments.py --diet --text-dataset ag_news # DiET on AG News
   python run_xai_experiments.py --all --low-vram         # Low VRAM mode
   python run_xai_experiments.py --cifar10 --skip-training  # Skip training, use saved model
         """,
@@ -337,6 +343,29 @@ Examples:
         default="resnet",
         choices=["simple", "resnet"],
         help="CNN model type (default: resnet)",
+    )
+
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="cifar10",
+        choices=["cifar10", "cifar100", "fashion_mnist", "mnist"],
+        help="Image dataset to use for DiET experiments (default: cifar10)"
+    )
+
+    parser.add_argument(
+        "--text-dataset",
+        type=str,
+        default="sst2",
+        choices=["sst2", "imdb", "ag_news", "yelp_review_full"],
+        help="Text dataset to use for DiET experiments (default: sst2)"
+    )
+
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=10,
+        help="Number of top tokens to compare in text experiments (default: 10)"
     )
 
     return parser.parse_args()
@@ -448,14 +477,14 @@ def main():
                 and diet_results["image_experiments"]
             ):
                 img = diet_results["image_experiments"]
-                print("  Image (CIFAR-10):")
+                print(f"  Image ({img['dataset']}):")
                 print(f"    GradCAM score: {img.get('gradcam_mean_score', 'N/A')}")
                 print(f"    DiET score: {img.get('diet_mean_score', 'N/A')}")
                 if img.get("diet_better"):
                     print("    ✓ DiET improves attribution quality")
             if "text_experiments" in diet_results and diet_results["text_experiments"]:
                 txt = diet_results["text_experiments"]
-                print("  Text (SST-2):")
+                print(f"  Text ({txt['dataset']}):")
                 print(f"    IG-DiET overlap: {txt.get('ig_diet_overlap', 'N/A')}")
 
     print("\n" + "=" * 60)
