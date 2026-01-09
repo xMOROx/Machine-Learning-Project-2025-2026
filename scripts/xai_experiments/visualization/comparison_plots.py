@@ -770,6 +770,11 @@ class ComparisonVisualizer:
             diet_score = img.get('diet_mean_score', 0)
             winner = 'DiET' if diet_score > gradcam_score else 'GradCAM'
             
+            baseline_acc = img.get('baseline_accuracy', None)
+            diet_acc = img.get('diet_accuracy', None)
+            baseline_acc_str = f"{baseline_acc:.2f}%" if baseline_acc is not None else "N/A"
+            diet_acc_str = f"{diet_acc:.2f}%" if diet_acc is not None else "N/A"
+            
             html += f"""
             <tr>
                 <td>Pixel Perturbation Score</td>
@@ -779,12 +784,12 @@ class ComparisonVisualizer:
             </tr>
             <tr>
                 <td>Baseline Accuracy</td>
-                <td colspan="2">{img.get('baseline_accuracy', 'N/A'):.2f}%</td>
+                <td colspan="2">{baseline_acc_str}</td>
                 <td>-</td>
             </tr>
             <tr>
                 <td>After DiET Accuracy</td>
-                <td colspan="2">{img.get('diet_accuracy', 'N/A'):.2f}%</td>
+                <td colspan="2">{diet_acc_str}</td>
                 <td>-</td>
             </tr>
         </table>
@@ -794,6 +799,12 @@ class ComparisonVisualizer:
         # Text section
         if 'text_experiments' in results:
             txt = results['text_experiments']
+            
+            ig_overlap = txt.get('ig_diet_overlap', None)
+            ig_overlap_str = f"{ig_overlap:.4f}" if ig_overlap is not None else "N/A"
+            txt_baseline_acc = txt.get('baseline_accuracy', None)
+            txt_baseline_acc_str = f"{txt_baseline_acc:.2f}%" if txt_baseline_acc is not None else "N/A"
+            
             html += f"""
     <div class="section">
         <h2>📝 Text Classification (SST-2)</h2>
@@ -807,12 +818,12 @@ class ComparisonVisualizer:
             </tr>
             <tr>
                 <td>IG-DiET Token Overlap</td>
-                <td>{txt.get('ig_diet_overlap', 'N/A'):.4f}</td>
-                <td>{"High agreement" if txt.get('ig_diet_overlap', 0) > 0.5 else "Methods differ"}</td>
+                <td>{ig_overlap_str}</td>
+                <td>{"High agreement" if (ig_overlap or 0) > 0.5 else "Methods differ"}</td>
             </tr>
             <tr>
                 <td>Baseline Accuracy</td>
-                <td>{txt.get('baseline_accuracy', 'N/A'):.2f}%</td>
+                <td>{txt_baseline_acc_str}</td>
                 <td>-</td>
             </tr>
             <tr>

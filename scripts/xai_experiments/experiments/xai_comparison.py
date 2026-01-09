@@ -133,6 +133,23 @@ class XAIMethodsComparison:
         
         # Initialize visualizer lazily
         self._visualizer = None
+        
+        # Compute data directory path
+        self._data_dir = self._compute_data_dir()
+    
+    def _compute_data_dir(self) -> str:
+        """Compute the data directory path."""
+        # Default data dir is relative to output_dir parent
+        output_parent = os.path.dirname(os.path.dirname(self.output_dir))
+        if output_parent and os.path.isdir(output_parent):
+            return os.path.join(output_parent, "data")
+        return "./data"
+    
+    def _get_config_value(self, attr_name: str, default_value):
+        """Safely get a config value with fallback to default."""
+        if hasattr(self.config, attr_name):
+            return getattr(self.config, attr_name)
+        return default_value
 
     def run_image_comparison(self, skip_training: bool = False) -> Dict[str, Any]:
         """Run image-based XAI comparison (CIFAR-10).
@@ -152,21 +169,18 @@ class XAIMethodsComparison:
 
         from .diet_experiment import DiETExperiment
 
-        # Build config from ComparisonConfig
-        device = self.config.device if hasattr(self.config, 'device') else self.config.get("device", "cuda")
-        data_dir = self.config.output_dir.replace("/comparison", "") if hasattr(self.config, 'output_dir') else self.config.get("data_dir", "./data")
-        
+        # Build config using helper method for clean access
         image_config = {
-            "device": device,
-            "data_dir": data_dir.replace("/xai_experiments/comparison", "") + "/data" if "/xai_experiments" in data_dir else "./data",
+            "device": self._get_config_value("device", "cuda"),
+            "data_dir": self._data_dir,
             "output_dir": os.path.join(self.output_dir, "cifar10"),
-            "model_type": self.config.image_model_type if hasattr(self.config, 'image_model_type') else "resnet",
-            "batch_size": self.config.image_batch_size if hasattr(self.config, 'image_batch_size') else self.config.get("batch_size", 64),
-            "max_samples": self.config.image_max_samples if hasattr(self.config, 'image_max_samples') else self.config.get("max_samples_image", 3000),
-            "baseline_epochs": self.config.image_epochs if hasattr(self.config, 'image_epochs') else self.config.get("epochs_image", 3),
-            "comparison_samples": self.config.image_comparison_samples if hasattr(self.config, 'image_comparison_samples') else self.config.get("comparison_samples", 16),
-            "upsample_factor": self.config.diet_upsample_factor if hasattr(self.config, 'diet_upsample_factor') else 4,
-            "rounding_steps": self.config.diet_rounding_steps if hasattr(self.config, 'diet_rounding_steps') else 2,
+            "model_type": self._get_config_value("image_model_type", "resnet"),
+            "batch_size": self._get_config_value("image_batch_size", 64),
+            "max_samples": self._get_config_value("image_max_samples", 3000),
+            "baseline_epochs": self._get_config_value("image_epochs", 3),
+            "comparison_samples": self._get_config_value("image_comparison_samples", 16),
+            "upsample_factor": self._get_config_value("diet_upsample_factor", 4),
+            "rounding_steps": self._get_config_value("diet_rounding_steps", 2),
         }
 
         experiment = DiETExperiment(image_config)
@@ -205,20 +219,17 @@ class XAIMethodsComparison:
 
         from .diet_text_experiment import DiETTextExperiment
 
-        # Build config from ComparisonConfig
-        device = self.config.device if hasattr(self.config, 'device') else self.config.get("device", "cuda")
-        data_dir = self.config.output_dir.replace("/comparison", "") if hasattr(self.config, 'output_dir') else self.config.get("data_dir", "./data")
-        
+        # Build config using helper method for clean access
         text_config = {
-            "device": device,
-            "data_dir": data_dir.replace("/xai_experiments/comparison", "") + "/data" if "/xai_experiments" in data_dir else "./data",
+            "device": self._get_config_value("device", "cuda"),
+            "data_dir": self._data_dir,
             "output_dir": os.path.join(self.output_dir, "sst2"),
-            "model_name": self.config.text_model_name if hasattr(self.config, 'text_model_name') else "bert-base-uncased",
-            "max_length": self.config.text_max_length if hasattr(self.config, 'text_max_length') else 128,
-            "max_samples": self.config.text_max_samples if hasattr(self.config, 'text_max_samples') else self.config.get("max_samples_text", 1000),
-            "epochs": self.config.text_epochs if hasattr(self.config, 'text_epochs') else self.config.get("epochs_text", 2),
-            "comparison_samples": self.config.text_comparison_samples if hasattr(self.config, 'text_comparison_samples') else self.config.get("comparison_samples_text", 10),
-            "rounding_steps": self.config.diet_rounding_steps if hasattr(self.config, 'diet_rounding_steps') else 2,
+            "model_name": self._get_config_value("text_model_name", "bert-base-uncased"),
+            "max_length": self._get_config_value("text_max_length", 128),
+            "max_samples": self._get_config_value("text_max_samples", 1000),
+            "epochs": self._get_config_value("text_epochs", 2),
+            "comparison_samples": self._get_config_value("text_comparison_samples", 10),
+            "rounding_steps": self._get_config_value("diet_rounding_steps", 2),
         }
 
         experiment = DiETTextExperiment(text_config)
