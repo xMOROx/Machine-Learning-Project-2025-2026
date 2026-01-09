@@ -6,10 +6,24 @@
 
 ## 1. Project Overview
 
-This project provides a **comprehensive framework for comparing DiET (Discriminative Feature Attribution)** with basic XAI methods:
+This project provides a **comprehensive framework for comparing DiET (Discriminative Feature Attribution)** with basic XAI methods across **multiple datasets**:
 
-- **Images**: DiET vs GradCAM on CIFAR-10
-- **Text**: DiET vs Integrated Gradients on SST-2
+### Supported Datasets
+
+| Modality | Dataset | Description | Classes |
+|----------|---------|-------------|---------|
+| **Image** | CIFAR-10 | Natural images | 10 |
+| **Image** | CIFAR-100 | Fine-grained images | 100 |
+| **Image** | SVHN | Street View House Numbers | 10 |
+| **Image** | Fashion-MNIST | Fashion products | 10 |
+| **Text** | SST-2 | Sentiment analysis | 2 |
+| **Text** | IMDB | Movie reviews | 2 |
+| **Text** | AG News | News classification | 4 |
+
+### Comparison Methods
+
+- **Images**: DiET vs GradCAM
+- **Text**: DiET vs Integrated Gradients
 
 Standard post-hoc explanation methods (e.g., GradCAM, Integrated Gradients) are popular tools for interpreting deep neural networks. However, they often suffer from a critical flaw: their attributions can be **unfaithful** to the model's underlying reasoning.
 
@@ -21,19 +35,20 @@ Standard post-hoc explanation methods (e.g., GradCAM, Integrated Gradients) are 
 - 📊 **Rich Visualizations**: Bar charts, radar plots, comparison dashboards, HTML reports
 - 📓 **Notebook-Friendly API**: Easy to use in Jupyter notebooks
 - 🖥️ **Hardware Optimized**: Automatic GPU detection with low-VRAM support
+- 📈 **Multi-Dataset Support**: Compare across 4 image and 3 text datasets
 
 ## 2. Quick Start
 
 ### Command Line
 
 ```bash
-# Run full DiET comparison (recommended)
+# Run full DiET comparison on ALL datasets (recommended)
 python scripts/xai_experiments/run_xai_experiments.py --diet
 
-# Run only image comparison (DiET vs GradCAM)
+# Run only image comparison (DiET vs GradCAM) on all image datasets
 python scripts/xai_experiments/run_xai_experiments.py --diet --diet-images
 
-# Run only text comparison (DiET vs IG)
+# Run only text comparison (DiET vs IG) on all text datasets
 python scripts/xai_experiments/run_xai_experiments.py --diet --diet-text
 
 # Low VRAM mode for smaller GPUs
@@ -45,10 +60,14 @@ python scripts/xai_experiments/run_xai_experiments.py --diet --low-vram
 ```python
 from scripts.xai_experiments import XAIMethodsComparison, ComparisonConfig
 
-# Configure the comparison
+# Configure the comparison with multiple datasets
 config = ComparisonConfig(
     device="cuda",
+    # Image datasets to compare
+    image_datasets=["cifar10", "cifar100", "svhn", "fashion_mnist"],
     image_comparison_samples=100,
+    # Text datasets to compare
+    text_datasets=["sst2", "imdb", "ag_news"],
     text_comparison_samples=50
 )
 
@@ -59,7 +78,7 @@ results = comparison.run_full_comparison(run_images=True, run_text=True)
 # Generate visualizations
 comparison.visualize_results()
 
-# Get results as DataFrame
+# Get results as DataFrame (one row per dataset)
 df = comparison.get_results_dataframe()
 print(df)
 ```
