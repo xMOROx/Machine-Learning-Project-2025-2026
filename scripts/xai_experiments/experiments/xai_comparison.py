@@ -1,14 +1,17 @@
-"""XAI Methods Comparison Module.
+"""XAI Methods Comparison Module - DiET vs GradCAM/IG Framework.
 
-This module provides comprehensive comparison between:
-- Basic XAI methods: GradCAM, Integrated Gradients
-- DiET: Discriminative Feature Attribution
+This module provides a comprehensive framework for comparing:
+- DiET (Discriminative Feature Attribution) with GradCAM for images
+- DiET with Integrated Gradients for text
 
-Evaluates and compares:
-1. Attribution quality (pixel perturbation)
-2. Faithfulness to model
-3. Localization accuracy
-4. Computational cost
+This is designed as a notebook-friendly framework with:
+1. Rich metrics (Pixel Perturbation, AOPC, Insertion/Deletion, Faithfulness)
+2. Comprehensive visualizations
+3. Easy-to-use API for Jupyter notebooks
+4. Robust evaluation on larger datasets
+
+Reference:
+- DiET: Bhalla et al., "Discriminative Feature Attributions", NeurIPS 2023
 """
 
 import os
@@ -16,8 +19,10 @@ import time
 import json
 import traceback
 import numpy as np
-from typing import Dict, Any, Optional
+import torch
+from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
+from dataclasses import dataclass, field
 
 
 import matplotlib
@@ -26,72 +31,142 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
+@dataclass
+class ComparisonConfig:
+    """Configuration for XAI comparison experiments."""
+    # Device settings
+    device: str = "cuda"
+    
+    # Image experiment settings
+    image_dataset: str = "cifar10"
+    image_model_type: str = "resnet"
+    image_batch_size: int = 64
+    image_epochs: int = 5
+    image_max_samples: int = 5000
+    image_comparison_samples: int = 100
+    
+    # Text experiment settings
+    text_dataset: str = "sst2"
+    text_model_name: str = "bert-base-uncased"
+    text_max_length: int = 128
+    text_max_samples: int = 2000
+    text_epochs: int = 2
+    text_comparison_samples: int = 50
+    
+    # DiET settings
+    diet_upsample_factor: int = 4
+    diet_rounding_steps: int = 2
+    
+    # Metric settings
+    perturbation_percentages: List[int] = field(default_factory=lambda: [5, 10, 20, 30, 50, 70, 90])
+    insertion_deletion_steps: int = 50
+    aopc_steps: int = 10
+    faithfulness_samples: int = 30
+    
+    # Output settings
+    output_dir: str = "./outputs/xai_experiments/comparison"
+    save_visualizations: bool = True
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            k: v if not isinstance(v, list) else v
+            for k, v in self.__dict__.items()
+        }
+
+
 class XAIMethodsComparison:
-    """Comprehensive comparison of XAI methods.
+    """Comprehensive comparison of XAI methods - DiET vs GradCAM/IG.
+
+    This is the main framework class for comparing attribution methods.
+    Designed to be used both as a standalone module and in Jupyter notebooks.
 
     Compares:
-    - GradCAM (image baseline)
-    - Integrated Gradients (image and text)
-    - DiET (discriminative attribution for images and text)
+    - GradCAM vs DiET for image classification (CIFAR-10)
+    - Integrated Gradients vs DiET for text classification (SST-2)
 
-    Metrics:
-    - Pixel perturbation accuracy (images)
-    - Top-k token overlap (text)
-    - Faithfulness scores
-    - Time complexity
+    Metrics computed:
+    - Pixel Perturbation (keep/remove important pixels)
+    - AOPC (Area Over Perturbation Curve)
+    - Insertion/Deletion curves
+    - Faithfulness Correlation
+    - Top-k Token Overlap (for text)
+
+    Example usage in notebook:
+        >>> from experiments.xai_comparison import XAIMethodsComparison, ComparisonConfig
+        >>> config = ComparisonConfig(device="cuda", image_comparison_samples=50)
+        >>> comparison = XAIMethodsComparison(config)
+        >>> results = comparison.run_full_comparison()
+        >>> comparison.visualize_results()
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Optional[ComparisonConfig] = None):
         """Initialize comparison module.
 
         Args:
-            config: Configuration with:
-                - output_dir: Where to save results
-                - device: CUDA/CPU
-                - run_images: Whether to run image experiments
-                - run_text: Whether to run text experiments
+            config: ComparisonConfig object or None for defaults.
+                   Can also pass a dictionary for backward compatibility.
         """
-        self.config = config
-        self.output_dir = config.get(
-            "output_dir", "./outputs/xai_experiments/comparison"
-        )
+        if config is None:
+            self.config = ComparisonConfig()
+        elif isinstance(config, dict):
+            # Backward compatibility with dict config
+            self.config = ComparisonConfig()
+            for key, value in config.items():
+                if hasattr(self.config, key):
+                    setattr(self.config, key, value)
+                elif key == "output_dir":
+                    self.config.output_dir = value
+        else:
+            self.config = config
+        
+        self.output_dir = self.config.output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.results = {
             "timestamp": datetime.now().isoformat(),
-            "config": config,
+            "config": self.config.to_dict() if hasattr(self.config, 'to_dict') else self.config,
             "image_experiments": {},
             "text_experiments": {},
+            "metrics": {},
         }
+        
+        # Initialize visualizer lazily
+        self._visualizer = None
 
     def run_image_comparison(self, skip_training: bool = False) -> Dict[str, Any]:
         """Run image-based XAI comparison (CIFAR-10).
 
-        Compares GradCAM vs DiET.
+        Compares GradCAM vs DiET with comprehensive metrics.
 
         Args:
             skip_training: If True, try to load previously trained models
 
         Returns:
-            Image experiment results
+            Image experiment results with detailed metrics
         """
         print("\n" + "=" * 70)
         print("IMAGE-BASED XAI COMPARISON (CIFAR-10)")
+        print("DiET vs GradCAM - Discriminative Feature Attribution")
         print("=" * 70)
 
         from .diet_experiment import DiETExperiment
 
+        # Build config from ComparisonConfig
+        device = self.config.device if hasattr(self.config, 'device') else self.config.get("device", "cuda")
+        data_dir = self.config.output_dir.replace("/comparison", "") if hasattr(self.config, 'output_dir') else self.config.get("data_dir", "./data")
+        
         image_config = {
-            "device": self.config.get("device", "cuda"),
-            "data_dir": self.config.get("data_dir", "./data"),
+            "device": device,
+            "data_dir": data_dir.replace("/xai_experiments/comparison", "") + "/data" if "/xai_experiments" in data_dir else "./data",
             "output_dir": os.path.join(self.output_dir, "cifar10"),
-            "model_type": "resnet",
-            "batch_size": self.config.get("batch_size", 64),
-            "max_samples": self.config.get("max_samples_image", 3000),
-            "baseline_epochs": self.config.get("epochs_image", 3),
-            "comparison_samples": self.config.get("comparison_samples", 16),
-            "upsample_factor": 4,
-            "rounding_steps": 2,
+            "model_type": self.config.image_model_type if hasattr(self.config, 'image_model_type') else "resnet",
+            "batch_size": self.config.image_batch_size if hasattr(self.config, 'image_batch_size') else self.config.get("batch_size", 64),
+            "max_samples": self.config.image_max_samples if hasattr(self.config, 'image_max_samples') else self.config.get("max_samples_image", 3000),
+            "baseline_epochs": self.config.image_epochs if hasattr(self.config, 'image_epochs') else self.config.get("epochs_image", 3),
+            "comparison_samples": self.config.image_comparison_samples if hasattr(self.config, 'image_comparison_samples') else self.config.get("comparison_samples", 16),
+            "upsample_factor": self.config.diet_upsample_factor if hasattr(self.config, 'diet_upsample_factor') else 4,
+            "rounding_steps": self.config.diet_rounding_steps if hasattr(self.config, 'diet_rounding_steps') else 2,
         }
 
         experiment = DiETExperiment(image_config)
@@ -115,30 +190,35 @@ class XAIMethodsComparison:
     def run_text_comparison(self, skip_training: bool = False) -> Dict[str, Any]:
         """Run text-based XAI comparison (SST-2).
 
-        Compares Integrated Gradients vs DiET.
+        Compares Integrated Gradients vs DiET with token-level analysis.
 
         Args:
             skip_training: If True, try to load previously trained models
 
         Returns:
-            Text experiment results
+            Text experiment results with detailed metrics
         """
         print("\n" + "=" * 70)
         print("TEXT-BASED XAI COMPARISON (SST-2)")
+        print("DiET vs Integrated Gradients - Token Attribution")
         print("=" * 70)
 
         from .diet_text_experiment import DiETTextExperiment
 
+        # Build config from ComparisonConfig
+        device = self.config.device if hasattr(self.config, 'device') else self.config.get("device", "cuda")
+        data_dir = self.config.output_dir.replace("/comparison", "") if hasattr(self.config, 'output_dir') else self.config.get("data_dir", "./data")
+        
         text_config = {
-            "device": self.config.get("device", "cuda"),
-            "data_dir": self.config.get("data_dir", "./data"),
+            "device": device,
+            "data_dir": data_dir.replace("/xai_experiments/comparison", "") + "/data" if "/xai_experiments" in data_dir else "./data",
             "output_dir": os.path.join(self.output_dir, "sst2"),
-            "model_name": "bert-base-uncased",
-            "max_length": 128,
-            "max_samples": self.config.get("max_samples_text", 1000),
-            "epochs": self.config.get("epochs_text", 2),
-            "comparison_samples": self.config.get("comparison_samples_text", 10),
-            "rounding_steps": 2,
+            "model_name": self.config.text_model_name if hasattr(self.config, 'text_model_name') else "bert-base-uncased",
+            "max_length": self.config.text_max_length if hasattr(self.config, 'text_max_length') else 128,
+            "max_samples": self.config.text_max_samples if hasattr(self.config, 'text_max_samples') else self.config.get("max_samples_text", 1000),
+            "epochs": self.config.text_epochs if hasattr(self.config, 'text_epochs') else self.config.get("epochs_text", 2),
+            "comparison_samples": self.config.text_comparison_samples if hasattr(self.config, 'text_comparison_samples') else self.config.get("comparison_samples_text", 10),
+            "rounding_steps": self.config.diet_rounding_steps if hasattr(self.config, 'diet_rounding_steps') else 2,
         }
 
         experiment = DiETTextExperiment(text_config)
@@ -158,12 +238,15 @@ class XAIMethodsComparison:
         Returns:
             Report as formatted string
         """
+        device = self.config.device if hasattr(self.config, 'device') else self.config.get('device', 'cuda')
+        
         report = []
         report.append("=" * 70)
         report.append("XAI METHODS COMPARISON REPORT")
+        report.append("DiET vs GradCAM (Images) & DiET vs IG (Text)")
         report.append("=" * 70)
         report.append(f"\nGenerated: {self.results['timestamp']}")
-        report.append(f"Device: {self.config.get('device', 'cuda')}")
+        report.append(f"Device: {device}")
 
         if self.results["image_experiments"]:
             img = self.results["image_experiments"]
@@ -207,6 +290,12 @@ class XAIMethodsComparison:
             else:
                 report.append("\n  → Methods identify different important tokens")
                 report.append("  → DiET may capture discriminative features IG misses")
+        
+        # Store report in results
+        report_str = "\n".join(report)
+        self.results["summary"] = {"report": report_str}
+        
+        return report_str
 
     def save_results(self) -> str:
         """Save all results to files.
@@ -339,6 +428,134 @@ class XAIMethodsComparison:
         print(f"\nTotal comparison time: {total_time / 60:.1f} minutes")
 
         return self.results
+    
+    def visualize_results(
+        self,
+        save_plots: bool = True,
+        show: bool = False
+    ) -> Dict[str, Any]:
+        """Generate comprehensive visualizations of comparison results.
+        
+        This method creates all visualizations for the comparison results,
+        including bar charts, radar plots, and HTML reports.
+        
+        Args:
+            save_plots: Whether to save plots to disk
+            show: Whether to display plots (for notebooks)
+            
+        Returns:
+            Dictionary with paths to generated visualizations
+        """
+        try:
+            from ..visualization import ComparisonVisualizer
+        except ImportError:
+            # Fallback to basic visualization
+            print("Advanced visualization not available, using basic plots")
+            self._create_summary_visualization()
+            return {"summary_plot": os.path.join(self.output_dir, "comparison_summary.png")}
+        
+        visualizer = ComparisonVisualizer(output_dir=self.output_dir)
+        generated_files = {}
+        
+        # Prepare metric results for plotting
+        if self.results["image_experiments"]:
+            img = self.results["image_experiments"]
+            image_metrics = {
+                "GradCAM": {"perturbation_score": img.get("gradcam_mean_score", 0)},
+                "DiET": {"perturbation_score": img.get("diet_mean_score", 0)}
+            }
+            
+            # Bar chart comparison
+            fig = visualizer.plot_metric_comparison_bar(
+                image_metrics,
+                title="Image Attribution Quality (CIFAR-10): DiET vs GradCAM",
+                save_name="image_metric_comparison",
+                show=show
+            )
+            generated_files["image_bar_chart"] = os.path.join(
+                self.output_dir, "image_metric_comparison.png"
+            )
+            plt.close(fig)
+            
+            # Perturbation curve if available
+            if "gradcam_perturbation" in img and "diet_perturbation" in img:
+                perturbation_results = {
+                    "GradCAM": img["gradcam_perturbation"],
+                    "DiET": img["diet_perturbation"]
+                }
+                fig = visualizer.plot_perturbation_curve(
+                    perturbation_results,
+                    title="Pixel Perturbation Analysis",
+                    save_name="perturbation_curves",
+                    show=show
+                )
+                generated_files["perturbation_curves"] = os.path.join(
+                    self.output_dir, "perturbation_curves.png"
+                )
+                plt.close(fig)
+        
+        # Create summary dashboard
+        fig = visualizer.create_summary_dashboard(
+            image_results=self.results.get("image_experiments"),
+            text_results=self.results.get("text_experiments"),
+            save_name="comparison_dashboard",
+            show=show
+        )
+        generated_files["dashboard"] = os.path.join(
+            self.output_dir, "comparison_dashboard.png"
+        )
+        plt.close(fig)
+        
+        # Generate HTML report
+        html_path = visualizer.generate_html_report(
+            self.results,
+            report_title="DiET vs Basic XAI Methods Comparison",
+            save_name="comparison_report"
+        )
+        generated_files["html_report"] = html_path
+        
+        print(f"\nVisualization files generated:")
+        for name, path in generated_files.items():
+            print(f"  - {name}: {path}")
+        
+        return generated_files
+    
+    def get_results_dataframe(self):
+        """Get results as a pandas DataFrame for easy analysis in notebooks.
+        
+        Returns:
+            pandas DataFrame with comparison results
+        """
+        import pandas as pd
+        
+        data = []
+        
+        if self.results["image_experiments"]:
+            img = self.results["image_experiments"]
+            data.append({
+                "Modality": "Image (CIFAR-10)",
+                "Method 1": "GradCAM",
+                "Method 2": "DiET",
+                "GradCAM Score": img.get("gradcam_mean_score", 0),
+                "DiET Score": img.get("diet_mean_score", 0),
+                "Improvement": img.get("improvement", 0),
+                "DiET Better": img.get("diet_better", False),
+                "Baseline Accuracy": img.get("baseline_accuracy", 0),
+                "DiET Accuracy": img.get("diet_accuracy", 0),
+            })
+        
+        if self.results["text_experiments"]:
+            txt = self.results["text_experiments"]
+            data.append({
+                "Modality": "Text (SST-2)",
+                "Method 1": "IG",
+                "Method 2": "DiET",
+                "IG-DiET Overlap": txt.get("ig_diet_overlap", 0),
+                "Samples Compared": txt.get("samples_compared", 0),
+                "Baseline Accuracy": txt.get("baseline_accuracy", 0),
+            })
+        
+        return pd.DataFrame(data)
 
 
 def run_diet_comparison(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

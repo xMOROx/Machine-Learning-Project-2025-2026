@@ -1,4 +1,4 @@
-# XAI: Tuning Models for Faithful and Discriminative Attributions
+# XAI: DiET vs Basic Methods Comparison Framework
 
 ![Python Version](https://img.shields.io/badge/python-3.10-blue.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-red.svg)
@@ -6,27 +6,71 @@
 
 ## 1. Project Overview
 
-Standard post-hoc explanation methods (e.g., GradCAM, Integrated Gradients) are a popular tool for interpreting deep neural networks. However, they often suffer from a critical flaw: their attributions can be **unfaithful** to the model's underlying reasoning. 'An explanation might highlight features that are inconsistent with the model's actual behavior or non-discriminative for the task'.
+This project provides a **comprehensive framework for comparing DiET (Discriminative Feature Attribution)** with basic XAI methods:
 
-This project implements and analyzes two recent, powerful techniques designed to bridge this gap and produce more faithful explanations:
+- **Images**: DiET vs GradCAM on CIFAR-10
+- **Text**: DiET vs Integrated Gradients on SST-2
 
-1. **Distractor Erasure Tuning (DiET)**: A method that fine-tunes a black-box model to be robust to the erasure of "distractor" features (i.e., non-discriminative parts of the input). This process yields a new model that is both faithful to the original and produces highly discriminative attributions[cite: 3306, 3408].
-2. **"How to Probe" Framework**: An analysis framework demonstrating that the design of a model's classification head (the "probe")—even if it's <10% of the parameters—has a crucial impact on the quality of post-hoc explanations[cite: 18]. Simply changing the probe's loss function (e.g., from Cross-Entropy to **BCE**) or architecture (e.g., **Linear** to **MLP**) can significantly improve attribution localization.
+Standard post-hoc explanation methods (e.g., GradCAM, Integrated Gradients) are popular tools for interpreting deep neural networks. However, they often suffer from a critical flaw: their attributions can be **unfaithful** to the model's underlying reasoning.
 
-This repository serves as a unified benchmark to reproduce, compare, and analyze these state-of-the-art methods for improving explanation faithfulness.
+**DiET (Distractor Erasure Tuning)** addresses this by fine-tuning models to be robust to the erasure of "distractor" features (non-discriminative parts of the input), yielding models that produce highly discriminative attributions.
 
-## 2. Core Papers
+### Key Features
 
-This project is a reproduction and comparative analysis of the following papers:
+- 🔬 **Robust Metrics**: Pixel Perturbation, AOPC, Insertion/Deletion, Faithfulness Correlation
+- 📊 **Rich Visualizations**: Bar charts, radar plots, comparison dashboards, HTML reports
+- 📓 **Notebook-Friendly API**: Easy to use in Jupyter notebooks
+- 🖥️ **Hardware Optimized**: Automatic GPU detection with low-VRAM support
+
+## 2. Quick Start
+
+### Command Line
+
+```bash
+# Run full DiET comparison (recommended)
+python scripts/xai_experiments/run_xai_experiments.py --diet
+
+# Run only image comparison (DiET vs GradCAM)
+python scripts/xai_experiments/run_xai_experiments.py --diet --diet-images
+
+# Run only text comparison (DiET vs IG)
+python scripts/xai_experiments/run_xai_experiments.py --diet --diet-text
+
+# Low VRAM mode for smaller GPUs
+python scripts/xai_experiments/run_xai_experiments.py --diet --low-vram
+```
+
+### In Jupyter Notebook
+
+```python
+from scripts.xai_experiments import XAIMethodsComparison, ComparisonConfig
+
+# Configure the comparison
+config = ComparisonConfig(
+    device="cuda",
+    image_comparison_samples=100,
+    text_comparison_samples=50
+)
+
+# Run comparison
+comparison = XAIMethodsComparison(config)
+results = comparison.run_full_comparison(run_images=True, run_text=True)
+
+# Generate visualizations
+comparison.visualize_results()
+
+# Get results as DataFrame
+df = comparison.get_results_dataframe()
+print(df)
+```
+
+## 3. Reference Paper
 
 * **(DiET)**: Bhalla, U., et al. (2023). **"Discriminative Feature Attributions: Bridging Post Hoc Explainability and Inherent Interpretability."** *NeurIPS 2023.*
   * [Paper PDF](<https://proceedings.neurips.cc/paper_files/paper/2023/file/5529f5f08d6d366b5c3e6f988900693b-Paper-Conference.pdf>)
   * [Official Repo](<https://github.com/AI4LIFE-GROUP/DiET>)
-* **(How to Probe)**: Gairola, S., et al. (2025). **"HOW TO PROBE: SIMPLE YET EFFECTIVE TECHNIQUES FOR IMPROVING POST-HOC EXPLANATIONS."** *ICLR 2025.*
-  * [Paper PDF](<https://openreview.net/pdf?id=66J13t3i3E>)
-  * [Official Repo](<https://github.com/sidgairo18/how-to-probe>)
 
-## 3. Setup & Installation
+## 4. Setup & Installation
 
 This project uses Python `uv` to manage venvs and dependencies.
 
@@ -50,111 +94,133 @@ uv venv
 git submodule update --init --recursive
 ```
 
-### Step 5: Install Project Dependencies
+### Step 4: Install Project Dependencies
 
 ```bash
 uv sync
 ```
 
-## 4. Data Download
+## 5. DiET Comparison Framework
 
+### 5.1 Experiments Overview
+
+| Experiment | Methods Compared | Dataset | Metrics |
+|------------|-----------------|---------|---------|
+| **Image Comparison** | DiET vs GradCAM | CIFAR-10 | Pixel Perturbation, AOPC, Faithfulness |
+| **Text Comparison** | DiET vs Integrated Gradients | SST-2 | Top-k Token Overlap, Accuracy |
+
+### 5.2 Running Comparisons
+
+**Full comparison (recommended):**
 ```bash
-bash scripts/download_project_data.sh --all
+./scripts/run.sh xai --xai-exp diet
 ```
 
-## 5. XAI Experiments
-
-The project includes comprehensive XAI (Explainable AI) experiments with multiple models and explanation methods optimized for low ram gpus.
-
-### 5.1 Available Experiments
-
-| Experiment | Description | XAI Method |
-|------------|-------------|------------|
-| **CIFAR-10** | CNN classification with visual explanations | GradCAM |
-| **GLUE SST-2** | BERT sentiment analysis with text explanations | Integrated Gradients |
-| **Model Comparison** | Compare CNN, RF, LightGBM, SVM, Logistic Regression | - |
-
-### 5.2 Running XAI Experiments
-
-**Run all experiments:**
+**Image-only comparison:**
 ```bash
-./scripts/run.sh xai --xai-exp all
+python scripts/xai_experiments/run_xai_experiments.py --diet --diet-images
 ```
 
-**Run specific experiments:**
+**Text-only comparison:**
 ```bash
-# CIFAR-10 with GradCAM
-./scripts/run.sh xai --xai-exp cifar10 --epochs 10
-
-# GLUE SST-2 with BERT
-./scripts/run.sh xai --xai-exp glue --epochs 3
-
-# Model comparison
-./scripts/run.sh xai --xai-exp compare
+python scripts/xai_experiments/run_xai_experiments.py --diet --diet-text
 ```
 
-**For low VRAM GPUs:**
-```bash
-./scripts/run.sh xai --xai-exp all --low-vram
-```
+### 5.3 Output Structure
 
-**Direct Python usage:**
-```bash
-cd scripts/xai_experiments
-python run_xai_experiments.py --all --low-vram
-```
-
-### 5.3 XAI Outputs
-
-Results are saved to `outputs/xai_experiments/`:
+Results are saved to `outputs/xai_experiments/diet_comparison/`:
 
 ```
-outputs/xai_experiments/
+outputs/xai_experiments/diet_comparison/
 ├── cifar10/
-│   ├── resnet_cifar10.pth          # Trained model
-│   ├── gradcam_batch.png           # Batch visualization
-│   ├── gradcam_visualizations/     # Individual GradCAM images
-│   └── experiment_results.json     # Metrics and results
-├── glue_sst2/
-│   ├── bert_sst2/                  # Fine-tuned BERT model
-│   ├── ig_visualizations/          # Token attribution images
-│   └── experiment_results.json     # Metrics and results
-└── model_comparison/
-    └── comparison_results.json     # Model comparison metrics
+│   ├── baseline_resnet.pth           # Trained baseline model
+│   ├── diet_resnet.pth               # DiET fine-tuned model
+│   ├── diet_mask_step*.pt            # Learned DiET masks
+│   ├── comparison_visualizations/    # GradCAM vs DiET heatmaps
+│   └── diet_experiment_results.json  # Detailed metrics
+├── sst2/
+│   ├── bert_baseline/                # Fine-tuned BERT model
+│   ├── diet_token_mask.pt            # Learned token masks
+│   ├── comparison_visualizations/    # IG vs DiET token attributions
+│   └── diet_text_results.json        # Comparison results
+├── comparison_dashboard.png          # Visual summary
+├── comparison_report.html            # Interactive HTML report
+└── comparison_results.json           # All metrics
 ```
 
-### 5.4 XAI Methods Implemented
+### 5.4 Metrics Computed
 
-#### GradCAM (Gradient-weighted Class Activation Mapping)
-- Visualizes which regions of an image are important for CNN predictions
-- Produces heatmaps overlaid on original images
-- Suitable for any CNN architecture
+#### Image Metrics
+- **Pixel Perturbation**: Keep/remove top-k% pixels and measure accuracy
+- **AOPC (Area Over Perturbation Curve)**: Average accuracy drop over perturbations
+- **Insertion/Deletion Curves**: Progressive pixel insertion/deletion
+- **Faithfulness Correlation**: Correlation between attributions and model sensitivity
 
-#### Integrated Gradients
-- Attributes prediction to input features along a path from baseline
-- For text: highlights important tokens for classification
-- Satisfies axioms of sensitivity and implementation invariance
+#### Text Metrics
+- **Top-k Token Overlap**: Agreement between methods on important tokens
+- **Accuracy Preservation**: Model accuracy after DiET tuning
 
-### 5.5 Model Architectures
+### 5.5 Visualization Examples
 
-| Model | Type | Description |
-|-------|------|-------------|
-| SimpleCNN | Vision | 4-layer CNN optimized for CIFAR-10 |
-| ResNetCIFAR | Vision | ResNet-18 adapted for 32x32 images |
-| BERT | Language | bert-base-uncased for sentiment analysis |
-| Random Forest | Traditional ML | Ensemble of decision trees |
-| LightGBM | Traditional ML | Gradient boosting framework |
-| SVM | Traditional ML | Support Vector Machine with RBF kernel |
-| Logistic Regression | Traditional ML | Linear classifier |
+The framework generates:
+- 📊 **Metric comparison bar charts**
+- 🎯 **Radar plots for multi-metric comparison**
+- 🖼️ **Side-by-side attribution heatmaps**
+- 📈 **Perturbation curves**
+- 📝 **Interactive HTML reports**
 
 ### 5.6 Hardware Optimization
 
-The orchestration script automatically detects GPU memory and adjusts settings:
+The framework automatically detects GPU memory and adjusts settings:
 
-| GPU Memory | Batch Size | Epochs | Workers |
-|------------|------------|--------|---------|
-| ≥ 8GB | 64 | 10 | 4 |
-| < 8GB | 16 | 5 | 2 |
-| CPU only | 16 | 2 | 0 |
+| GPU Memory | Batch Size | Comparison Samples | Configuration |
+|------------|------------|-------------------|---------------|
+| ≥ 8GB | 64 | 100 | Standard |
+| < 8GB | 32 | 50 | Low VRAM |
+| CPU only | 16 | 20 | Minimal |
 
 Use `--low-vram` flag to force low memory configuration.
+
+## 6. API Reference
+
+### ComparisonConfig
+
+```python
+from scripts.xai_experiments import ComparisonConfig
+
+config = ComparisonConfig(
+    device="cuda",                    # Device for computation
+    image_model_type="resnet",        # CNN architecture
+    image_batch_size=64,              # Batch size for images
+    image_epochs=5,                   # Training epochs
+    image_max_samples=5000,           # Training samples
+    image_comparison_samples=100,     # Samples for metric computation
+    text_model_name="bert-base-uncased",
+    text_max_samples=2000,
+    text_comparison_samples=50,
+    diet_upsample_factor=4,           # DiET mask upsampling
+    diet_rounding_steps=2,            # DiET distillation steps
+    output_dir="./outputs"
+)
+```
+
+### XAIMethodsComparison
+
+```python
+from scripts.xai_experiments import XAIMethodsComparison
+
+comparison = XAIMethodsComparison(config)
+
+# Run full comparison
+results = comparison.run_full_comparison(
+    run_images=True,
+    run_text=True,
+    skip_training=False
+)
+
+# Generate visualizations
+comparison.visualize_results(save_plots=True, show=False)
+
+# Get pandas DataFrame
+df = comparison.get_results_dataframe()
+```
