@@ -103,7 +103,10 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
 def run_cifar10_experiment(
     config: Dict[str, Any], args: argparse.Namespace
 ) -> Dict[str, Any]:
-    """Run CIFAR-10 GradCAM experiment.
+    """Run CIFAR-10 GradCAM experiment (deprecated - use --diet instead).
+
+    This is now part of the DiET comparison framework.
+    Use --diet --diet-images for DiET vs GradCAM comparison.
 
     Args:
         config: Device configuration
@@ -112,46 +115,24 @@ def run_cifar10_experiment(
     Returns:
         Experiment results
     """
-    from experiments.cifar10_experiment import CIFAR10Experiment
-
     print("\n" + "=" * 60)
-    print("Starting CIFAR-10 GradCAM Experiment")
+    print("DEPRECATED: Use --diet --diet-images instead")
+    print("Redirecting to DiET vs GradCAM comparison...")
     print("=" * 60)
-
-    experiment_config = {
-        "data_dir": args.data_dir,
-        "output_dir": os.path.join(args.output_dir, "cifar10"),
-        "model_type": args.model_type,
-        "batch_size": config["cnn_batch_size"],
-        "num_workers": config["num_workers"],
-        "epochs": config["cnn_epochs"],
-        "learning_rate": 0.001,
-        "device": config["device"],
-    }
-
-    experiment = CIFAR10Experiment(experiment_config)
-
-    if args.skip_training:
-        model_path = os.path.join(
-            experiment_config["output_dir"], f"{args.model_type}_cifar10.pth"
-        )
-        if os.path.exists(model_path):
-            experiment.prepare_data()
-            experiment.load_model(model_path)
-            results = experiment.generate_gradcam(num_samples=config["gradcam_samples"])
-        else:
-            print(f"Model not found at {model_path}. Running full pipeline.")
-            results = experiment.run_full_pipeline()
-    else:
-        results = experiment.run_full_pipeline()
-
-    return results
+    
+    # Redirect to DiET comparison with images only
+    args.diet_images = True
+    args.diet_text = False
+    return run_diet_experiment(config, args)
 
 
 def run_glue_experiment(
     config: Dict[str, Any], args: argparse.Namespace
 ) -> Dict[str, Any]:
-    """Run GLUE SST-2 BERT Integrated Gradients experiment.
+    """Run GLUE SST-2 BERT experiment (deprecated - use --diet instead).
+
+    This is now part of the DiET comparison framework.
+    Use --diet --diet-text for DiET vs IG comparison.
 
     Args:
         config: Device configuration
@@ -160,79 +141,38 @@ def run_glue_experiment(
     Returns:
         Experiment results
     """
-    from experiments.glue_experiment import GLUEExperiment
-
     print("\n" + "=" * 60)
-    print("Starting GLUE SST-2 BERT Integrated Gradients Experiment")
+    print("DEPRECATED: Use --diet --diet-text instead")
+    print("Redirecting to DiET vs IG comparison...")
     print("=" * 60)
-
-    experiment_config = {
-        "data_dir": args.data_dir,
-        "output_dir": os.path.join(args.output_dir, "glue_sst2"),
-        "model_name": "bert-base-uncased",
-        "batch_size": config["glue_batch_size"],
-        "max_length": 128,
-        "epochs": config["glue_epochs"],
-        "learning_rate": 2e-5,
-        "device": config["device"],
-    }
-
-    experiment = GLUEExperiment(experiment_config)
-
-    if args.skip_training:
-        model_path = os.path.join(experiment_config["output_dir"], "bert_sst2")
-        if os.path.exists(model_path):
-            experiment.prepare_data()
-            experiment.load_model(model_path)
-            results = experiment.generate_integrated_gradients(
-                num_samples=10, n_steps=config["ig_steps"]
-            )
-        else:
-            print(f"Model not found at {model_path}. Running full pipeline.")
-            results = experiment.run_full_pipeline()
-    else:
-        results = experiment.run_full_pipeline()
-
-    return results
+    
+    # Redirect to DiET comparison with text only
+    args.diet_images = False
+    args.diet_text = True
+    return run_diet_experiment(config, args)
 
 
 def run_model_comparison(
     config: Dict[str, Any], args: argparse.Namespace
 ) -> Dict[str, Any]:
-    """Run model comparison experiment.
+    """Run model comparison experiment (removed).
+
+    This experiment has been removed as it is not related to
+    DiET vs GradCAM/IG comparison. Use --diet for XAI comparison.
 
     Args:
         config: Device configuration
         args: Command line arguments
 
     Returns:
-        Comparison results
+        Empty results
     """
-    from experiments.model_comparison import ModelComparison
-
     print("\n" + "=" * 60)
-    print("Starting Model Comparison Experiment")
+    print("REMOVED: Model comparison is no longer available")
+    print("Use --diet for DiET vs GradCAM/IG comparison instead")
     print("=" * 60)
-
-    comparison_config = {
-        "data_dir": args.data_dir,
-        "output_dir": os.path.join(args.output_dir, "model_comparison"),
-        "batch_size": config["cnn_batch_size"],
-        "sample_size": config["sample_size"],
-        "device": config["device"],
-        "cnn_epochs": min(5, config["cnn_epochs"]),
-        "cnn_learning_rate": 0.001,
-        "rf_n_estimators": 100,
-        "rf_max_depth": 20,
-        "lgb_n_estimators": 100,
-        "svm_kernel": "rbf",
-        "lr_max_iter": 1000,
-    }
-
-    comparison = ModelComparison(comparison_config)
-    results = comparison.run_comparison()
-
-    return results
+    
+    return {"error": "Model comparison has been removed. Use --diet instead."}
 
 
 def run_diet_experiment(
@@ -368,17 +308,21 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 This framework compares DiET (Discriminative Feature Attribution) with:
-  - GradCAM for image classification (CIFAR-10)
-  - Integrated Gradients for text classification (SST-2)
+  - GradCAM for image classification (CIFAR-10 dataset)
+  - Integrated Gradients for text classification (SST-2 dataset)
+
+Datasets:
+  - CIFAR-10: 60,000 32x32 color images in 10 classes
+  - SST-2: Stanford Sentiment Treebank for binary sentiment analysis
 
 Examples:
   # Main use case: Run full DiET comparison (recommended)
   python run_xai_experiments.py --diet
   
-  # Run only image comparison (DiET vs GradCAM)
+  # Run only image comparison (DiET vs GradCAM on CIFAR-10)
   python run_xai_experiments.py --diet --diet-images
   
-  # Run only text comparison (DiET vs IG)
+  # Run only text comparison (DiET vs IG on SST-2)
   python run_xai_experiments.py --diet --diet-text
   
   # Low VRAM mode for smaller GPUs
@@ -386,10 +330,6 @@ Examples:
   
   # Skip training, use saved models
   python run_xai_experiments.py --diet --skip-training
-  
-  # Legacy: Run standalone experiments (not comparison)
-  python run_xai_experiments.py --cifar10   # CIFAR-10 GradCAM only
-  python run_xai_experiments.py --glue      # GLUE SST-2 IG only
         """,
     )
 
@@ -401,25 +341,19 @@ Examples:
     parser.add_argument(
         "--diet-images",
         action="store_true",
-        help="Run DiET comparison for images only (DiET vs GradCAM)",
+        help="Run DiET comparison for images only (DiET vs GradCAM on CIFAR-10)",
     )
     parser.add_argument(
         "--diet-text",
         action="store_true",
-        help="Run DiET comparison for text only (DiET vs IG)",
+        help="Run DiET comparison for text only (DiET vs IG on SST-2)",
     )
     
-    # Legacy standalone experiments
-    parser.add_argument("--all", action="store_true", help="Run all experiments (legacy)")
-    parser.add_argument(
-        "--cifar10", action="store_true", help="Run standalone CIFAR-10 GradCAM experiment"
-    )
-    parser.add_argument(
-        "--glue", action="store_true", help="Run standalone GLUE SST-2 BERT experiment"
-    )
-    parser.add_argument(
-        "--compare", action="store_true", help="Run model comparison experiment (legacy)"
-    )
+    # Legacy options (deprecated, redirect to --diet)
+    parser.add_argument("--all", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--cifar10", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--glue", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--compare", action="store_true", help=argparse.SUPPRESS)
 
     parser.add_argument(
         "--data-dir",
@@ -465,14 +399,19 @@ def main():
     """Main entry point."""
     args = parse_args()
 
-    if not (args.all or args.cifar10 or args.glue or args.compare or args.diet):
+    # Any of the flags should trigger the comparison
+    should_run = args.diet or args.diet_images or args.diet_text or args.all or args.cifar10 or args.glue or args.compare
+    
+    if not should_run:
         print("=" * 60)
         print("DiET vs Basic XAI Methods Comparison Framework")
         print("=" * 60)
+        print("\nDatasets:")
+        print("  - CIFAR-10: For image classification (DiET vs GradCAM)")
+        print("  - SST-2: For text classification (DiET vs Integrated Gradients)")
         print("\nNo experiment selected. Use --help for usage information.")
         print("\nQuick start (recommended):")
         print("  python run_xai_experiments.py --diet")
-        print("\nThis compares DiET with GradCAM (images) and Integrated Gradients (text).")
         return
 
     if args.cpu:
@@ -483,6 +422,9 @@ def main():
     print("=" * 60)
     print("DiET vs Basic XAI Methods Comparison Framework")
     print("=" * 60)
+    print("\nDatasets:")
+    print("  - CIFAR-10: For image classification (DiET vs GradCAM)")
+    print("  - SST-2: For text classification (DiET vs Integrated Gradients)")
 
     config = get_device_config(args.low_vram)
 
@@ -501,23 +443,10 @@ def main():
     total_start = time.time()
 
     try:
-        # Main comparison mode (recommended)
-        if args.diet or (not args.cifar10 and not args.glue and not args.compare and args.all):
-            all_results["experiments"]["diet_comparison"] = run_diet_experiment(
-                config, args
-            )
-        
-        # Legacy standalone experiments
-        if args.cifar10 and not args.diet:
-            all_results["experiments"]["cifar10"] = run_cifar10_experiment(config, args)
-
-        if args.glue and not args.diet:
-            all_results["experiments"]["glue_sst2"] = run_glue_experiment(config, args)
-
-        if args.compare and not args.diet:
-            all_results["experiments"]["model_comparison"] = run_model_comparison(
-                config, args
-            )
+        # All paths now go through run_diet_experiment
+        all_results["experiments"]["diet_comparison"] = run_diet_experiment(
+            config, args
+        )
 
     except KeyboardInterrupt:
         print("\n\nExperiment interrupted by user.")
@@ -583,19 +512,6 @@ def main():
                     print("   → High agreement between methods")
                 else:
                     print("   → DiET identifies different discriminative features")
-    
-    # Legacy standalone results
-    if "cifar10" in all_results["experiments"]:
-        print("\nStandalone CIFAR-10 Results:")
-        cifar_results = all_results["experiments"]["cifar10"]
-        if isinstance(cifar_results, dict) and "final_test_accuracy" in cifar_results:
-            print(f"  Test Accuracy: {cifar_results['final_test_accuracy']:.2f}%")
-
-    if "glue_sst2" in all_results["experiments"]:
-        print("\nStandalone GLUE SST-2 Results:")
-        glue_results = all_results["experiments"]["glue_sst2"]
-        if isinstance(glue_results, dict) and "final_val_accuracy" in glue_results:
-            print(f"  Validation Accuracy: {glue_results['final_val_accuracy']:.2f}%")
 
     print("\n" + "=" * 60)
     print("For notebook usage:")

@@ -2,16 +2,15 @@
 
 This module provides the core experiment classes for comparing
 DiET with GradCAM (images) and Integrated Gradients (text).
+
+Datasets used:
+- CIFAR-10: For image classification and DiET vs GradCAM comparison
+- SST-2 (GLUE): For text classification and DiET vs Integrated Gradients comparison
 """
 
 from .diet_experiment import DiETExperiment, DiETExplainer
 from .diet_text_experiment import DiETTextExperiment, DiETTextExplainer
 from .xai_comparison import XAIMethodsComparison, ComparisonConfig, run_diet_comparison
-
-# Keep these for backward compatibility but they are not the main focus
-from .cifar10_experiment import CIFAR10Experiment
-from .glue_experiment import GLUEExperiment
-from .model_comparison import ModelComparison
 
 __all__ = [
     # Main comparison framework
@@ -23,8 +22,4 @@ __all__ = [
     "DiETExplainer",
     "DiETTextExperiment",
     "DiETTextExplainer",
-    # Backward compatibility
-    "CIFAR10Experiment",
-    "GLUEExperiment",
-    "ModelComparison",
 ]
