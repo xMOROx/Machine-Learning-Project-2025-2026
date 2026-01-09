@@ -198,8 +198,9 @@ def run_diet_experiment(
     print("DiET vs Basic XAI Methods Comparison Framework")
     print("=" * 60)
     print("Comparing:")
-    print("  - Images: DiET vs GradCAM on CIFAR-10")
-    print("  - Text: DiET vs Integrated Gradients on SST-2")
+    print("  - Images: DiET vs GradCAM (CIFAR-10, CIFAR-100, SVHN, Fashion-MNIST)")
+    print("  - Text: DiET vs Integrated Gradients (SST-2, IMDB, AG News)")
+    print(f"  - Text top-k tokens: {args.top_k}")
     print("=" * 60)
 
     # Build ComparisonConfig
@@ -212,6 +213,7 @@ def run_diet_experiment(
         text_epochs=min(3, config.get("glue_epochs", 2)),
         text_max_samples=config.get("sample_size", 2000) // 2,
         text_comparison_samples=config.get("text_comparison_samples", 50),
+        text_top_k=args.top_k,  # Top-k tokens for text attribution
         output_dir=os.path.join(args.output_dir, "diet_comparison"),
     )
 
@@ -240,6 +242,7 @@ def run_comparison(
     low_vram: bool = False,
     output_dir: str = "./outputs/xai_experiments",
     skip_training: bool = False,
+    top_k: int = 5,
     **kwargs
 ) -> Dict[str, Any]:
     """Convenience function for notebook usage.
@@ -252,6 +255,7 @@ def run_comparison(
         low_vram: Use low memory configuration
         output_dir: Output directory for results
         skip_training: Skip training, use saved models
+        top_k: Number of top tokens to show in text attribution (default: 5)
         **kwargs: Additional configuration overrides
         
     Returns:
@@ -259,7 +263,7 @@ def run_comparison(
         
     Example:
         >>> from run_xai_experiments import run_comparison
-        >>> results = run_comparison(run_images=True, run_text=False)
+        >>> results = run_comparison(run_images=True, run_text=False, top_k=10)
         >>> print(results["image_experiments"])
     """
     from experiments.xai_comparison import XAIMethodsComparison, ComparisonConfig
@@ -275,6 +279,7 @@ def run_comparison(
         text_epochs=config.get("glue_epochs", 2),
         text_max_samples=config.get("sample_size", 2000) // 2,
         text_comparison_samples=config.get("text_comparison_samples", 50),
+        text_top_k=top_k,
         output_dir=os.path.join(output_dir, "diet_comparison"),
     )
     
@@ -308,22 +313,32 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 This framework compares DiET (Discriminative Feature Attribution) with:
-  - GradCAM for image classification (CIFAR-10 dataset)
-  - Integrated Gradients for text classification (SST-2 dataset)
+  - GradCAM for image classification
+  - Integrated Gradients for text classification
 
-Datasets:
+Image Datasets (4 total):
   - CIFAR-10: 60,000 32x32 color images in 10 classes
-  - SST-2: Stanford Sentiment Treebank for binary sentiment analysis
+  - CIFAR-100: 60,000 32x32 color images in 100 classes
+  - SVHN: Street View House Numbers (10 digit classes)
+  - Fashion-MNIST: 70,000 grayscale images of fashion products (10 classes)
+
+Text Datasets (3 total):
+  - SST-2: Stanford Sentiment Treebank (binary sentiment)
+  - IMDB: Movie reviews (binary sentiment, longer texts)
+  - AG News: News classification (4 classes)
 
 Examples:
-  # Main use case: Run full DiET comparison (recommended)
+  # Run full DiET comparison on all datasets (recommended)
   python run_xai_experiments.py --diet
   
-  # Run only image comparison (DiET vs GradCAM on CIFAR-10)
+  # Run only image comparison (DiET vs GradCAM)
   python run_xai_experiments.py --diet --diet-images
   
-  # Run only text comparison (DiET vs IG on SST-2)
+  # Run only text comparison (DiET vs IG)
   python run_xai_experiments.py --diet --diet-text
+  
+  # Show top 10 important tokens in text attribution
+  python run_xai_experiments.py --diet --diet-text --top-k 10
   
   # Low VRAM mode for smaller GPUs
   python run_xai_experiments.py --diet --low-vram
@@ -341,12 +356,20 @@ Examples:
     parser.add_argument(
         "--diet-images",
         action="store_true",
-        help="Run DiET comparison for images only (DiET vs GradCAM on CIFAR-10)",
+        help="Run DiET comparison for images only (DiET vs GradCAM)",
     )
     parser.add_argument(
         "--diet-text",
         action="store_true",
-        help="Run DiET comparison for text only (DiET vs IG on SST-2)",
+        help="Run DiET comparison for text only (DiET vs IG)",
+    )
+    
+    # Text-specific options
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=5,
+        help="Number of top important tokens to show in text attribution (default: 5)",
     )
     
     # Legacy options (deprecated, redirect to --diet)

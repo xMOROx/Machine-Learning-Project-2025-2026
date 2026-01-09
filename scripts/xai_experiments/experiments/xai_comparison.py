@@ -57,6 +57,7 @@ class ComparisonConfig:
     text_max_samples: int = 2000
     text_epochs: int = 2
     text_comparison_samples: int = 50
+    text_top_k: int = 5  # Number of top tokens to show in attribution
     
     # DiET settings
     diet_upsample_factor: int = 4
