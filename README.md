@@ -31,11 +31,11 @@ Standard post-hoc explanation methods (e.g., GradCAM, Integrated Gradients) are 
 
 ### Key Features
 
-- 🔬 **Robust Metrics**: Pixel Perturbation, AOPC, Insertion/Deletion, Faithfulness Correlation
-- 📊 **Rich Visualizations**: Bar charts, radar plots, comparison dashboards, HTML reports
-- 📓 **Notebook-Friendly API**: Easy to use in Jupyter notebooks
-- 🖥️ **Hardware Optimized**: Automatic GPU detection with low-VRAM support
-- 📈 **Multi-Dataset Support**: Compare across 4 image and 3 text datasets
+- **Robust Metrics**: Pixel Perturbation, AOPC, Insertion/Deletion, Faithfulness Correlation
+- **Rich Visualizations**: Bar charts, radar plots, comparison dashboards, HTML reports
+- **Notebook-Friendly API**: Easy to use in Jupyter notebooks
+- **Hardware Optimized**: Automatic GPU detection with low-VRAM support
+- **Multi-Dataset Support**: Compare across 4 image and 3 text datasets
 
 ## 2. Quick Start
 
@@ -132,7 +132,7 @@ uv sync
 
 **Full comparison (recommended):**
 ```bash
-./scripts/run.sh xai --xai-exp diet
+./scripts/run_xai.sh
 ```
 
 **Image-only comparison:**
@@ -182,11 +182,11 @@ outputs/xai_experiments/diet_comparison/
 ### 5.5 Visualization Examples
 
 The framework generates:
-- 📊 **Metric comparison bar charts**
-- 🎯 **Radar plots for multi-metric comparison**
-- 🖼️ **Side-by-side attribution heatmaps**
-- 📈 **Perturbation curves**
-- 📝 **Interactive HTML reports**
+- **Metric comparison bar charts**
+- **Radar plots for multi-metric comparison**
+- **Side-by-side attribution heatmaps**
+- **Perturbation curves**
+- **Interactive HTML reports**
 
 ### 5.6 Hardware Optimization
 
