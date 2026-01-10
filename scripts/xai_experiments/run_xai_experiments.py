@@ -277,12 +277,6 @@ Examples:
         help="Number of top important tokens to show in text attribution (default: 5)",
     )
 
-    # Legacy options (deprecated, redirect to --diet)
-    parser.add_argument("--all", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--cifar10", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--glue", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--compare", action="store_true", help=argparse.SUPPRESS)
-
     parser.add_argument(
         "--data-dir",
         type=str,
@@ -328,15 +322,7 @@ def main():
     args = parse_args()
 
     # Any of the flags should trigger the comparison
-    should_run = (
-        args.diet
-        or args.diet_images
-        or args.diet_text
-        or args.all
-        or args.cifar10
-        or args.glue
-        or args.compare
-    )
+    should_run = args.diet or args.diet_images or args.diet_text
 
     if not should_run:
         print("No experiment selected. Use --help for usage information.")
