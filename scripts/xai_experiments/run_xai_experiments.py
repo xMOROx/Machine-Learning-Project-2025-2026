@@ -10,7 +10,7 @@ Usage:
         python run_xai_experiments.py --diet --diet-images  # Images only
         python run_xai_experiments.py --diet --diet-text    # Text only
         python run_xai_experiments.py --diet --low-vram     # Low memory mode
-    
+
     In notebook:
         from run_xai_experiments import run_comparison
         results = run_comparison(run_images=True, run_text=True)
@@ -22,7 +22,7 @@ import argparse
 import json
 import time
 import torch
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -94,9 +94,6 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
         }
 
 
-
-
-
 def run_diet_experiment(
     config: Dict[str, Any], args: argparse.Namespace
 ) -> Dict[str, Any]:
@@ -116,7 +113,6 @@ def run_diet_experiment(
     """
     from experiments.xai_comparison import XAIMethodsComparison, ComparisonConfig
 
-    # Build ComparisonConfig
     comparison_config = ComparisonConfig(
         device=config["device"],
         image_batch_size=config["cnn_batch_size"],
@@ -126,7 +122,7 @@ def run_diet_experiment(
         text_epochs=min(3, config.get("glue_epochs", 2)),
         text_max_samples=config.get("sample_size", 2000) // 2,
         text_comparison_samples=config.get("text_comparison_samples", 50),
-        text_top_k=args.top_k,  # Top-k tokens for text attribution
+        text_top_k=args.top_k,
         output_dir=os.path.join(args.output_dir, "diet_comparison"),
     )
 
@@ -138,8 +134,7 @@ def run_diet_experiment(
     results = comparison.run_full_comparison(
         run_images=run_images, run_text=run_text, skip_training=args.skip_training
     )
-    
-    # Generate visualizations
+
     if results:
         try:
             comparison.visualize_results(save_plots=True, show=False)
@@ -156,12 +151,12 @@ def run_comparison(
     output_dir: str = "./outputs/xai_experiments",
     skip_training: bool = False,
     top_k: int = 5,
-    **kwargs
+    **kwargs,
 ) -> Dict[str, Any]:
     """Convenience function for notebook usage.
-    
+
     Run DiET comparison experiments with sensible defaults.
-    
+
     Args:
         run_images: Whether to run image experiments (DiET vs GradCAM)
         run_text: Whether to run text experiments (DiET vs IG)
@@ -170,19 +165,19 @@ def run_comparison(
         skip_training: Skip training, use saved models
         top_k: Number of top tokens to show in text attribution (default: 5)
         **kwargs: Additional configuration overrides
-        
+
     Returns:
         Comparison results dictionary
-        
+
     Example:
         >>> from run_xai_experiments import run_comparison
         >>> results = run_comparison(run_images=True, run_text=False, top_k=10)
         >>> print(results["image_experiments"])
     """
     from experiments.xai_comparison import XAIMethodsComparison, ComparisonConfig
-    
+
     config = get_device_config(low_vram)
-    
+
     comparison_config = ComparisonConfig(
         device=config["device"],
         image_batch_size=config["cnn_batch_size"],
@@ -195,27 +190,23 @@ def run_comparison(
         text_top_k=top_k,
         output_dir=os.path.join(output_dir, "diet_comparison"),
     )
-    
-    # Apply any overrides
+
     for key, value in kwargs.items():
         if hasattr(comparison_config, key):
             setattr(comparison_config, key, value)
-    
+
     comparison = XAIMethodsComparison(comparison_config)
-    
+
     results = comparison.run_full_comparison(
-        run_images=run_images,
-        run_text=run_text,
-        skip_training=skip_training
+        run_images=run_images, run_text=run_text, skip_training=skip_training
     )
-    
-    # Generate visualizations
+
     if results:
         try:
             comparison.visualize_results(save_plots=True, show=False)
         except Exception as e:
             print(f"Visualization generation failed: {e}")
-    
+
     return results
 
 
@@ -263,8 +254,9 @@ Examples:
 
     # Main comparison options
     parser.add_argument(
-        "--diet", action="store_true", 
-        help="Run DiET vs basic XAI comparison (main use case)"
+        "--diet",
+        action="store_true",
+        help="Run DiET vs basic XAI comparison (main use case)",
     )
     parser.add_argument(
         "--diet-images",
@@ -276,7 +268,7 @@ Examples:
         action="store_true",
         help="Run DiET comparison for text only (DiET vs IG)",
     )
-    
+
     # Text-specific options
     parser.add_argument(
         "--top-k",
@@ -284,7 +276,7 @@ Examples:
         default=5,
         help="Number of top important tokens to show in text attribution (default: 5)",
     )
-    
+
     # Legacy options (deprecated, redirect to --diet)
     parser.add_argument("--all", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--cifar10", action="store_true", help=argparse.SUPPRESS)
@@ -336,8 +328,16 @@ def main():
     args = parse_args()
 
     # Any of the flags should trigger the comparison
-    should_run = args.diet or args.diet_images or args.diet_text or args.all or args.cifar10 or args.glue or args.compare
-    
+    should_run = (
+        args.diet
+        or args.diet_images
+        or args.diet_text
+        or args.all
+        or args.cifar10
+        or args.glue
+        or args.compare
+    )
+
     if not should_run:
         print("No experiment selected. Use --help for usage information.")
         return

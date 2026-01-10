@@ -10,8 +10,8 @@ This is designed as a notebook-friendly framework with:
 3. Easy-to-use API for Jupyter notebooks
 4. Robust evaluation on larger datasets
 
-Reference:
-- DiET: Bhalla et al., "Discriminative Feature Attributions", NeurIPS 2023
+Reference: Bhalla et al., "Discriminative Feature Attributions:
+Bridging Post Hoc Explainability and Inherent Interpretability", NeurIPS 2023
 """
 
 import os
@@ -19,8 +19,7 @@ import time
 import json
 import traceback
 import numpy as np
-import torch
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from dataclasses import dataclass, field
 
@@ -34,56 +33,62 @@ import matplotlib.pyplot as plt
 @dataclass
 class ComparisonConfig:
     """Configuration for XAI comparison experiments.
-    
+
     Supported datasets:
     - Image: cifar10, cifar100, svhn, fashion_mnist
     - Text: sst2, imdb, ag_news
     """
+
     # Device settings
     device: str = "cuda"
-    
+
     # Image experiment settings
-    image_datasets: List[str] = field(default_factory=lambda: ["cifar10", "cifar100", "svhn", "fashion_mnist"])
+    image_datasets: List[str] = field(
+        default_factory=lambda: ["cifar10", "cifar100", "svhn", "fashion_mnist"]
+    )
     image_model_type: str = "resnet"
     image_batch_size: int = 64
     image_epochs: int = 5
     image_max_samples: int = 5000
     image_comparison_samples: int = 100
-    
+
     # Text experiment settings
-    text_datasets: List[str] = field(default_factory=lambda: ["sst2", "imdb", "ag_news"])
+    text_datasets: List[str] = field(
+        default_factory=lambda: ["sst2", "imdb", "ag_news"]
+    )
     text_model_name: str = "bert-base-uncased"
     text_max_length: int = 128
     text_max_samples: int = 2000
     text_epochs: int = 2
     text_comparison_samples: int = 50
     text_top_k: int = 5  # Number of top tokens to show in attribution
-    
+
     # DiET settings
     diet_upsample_factor: int = 4
     diet_rounding_steps: int = 2
-    
+
     # Metric settings
-    perturbation_percentages: List[int] = field(default_factory=lambda: [5, 10, 20, 30, 50, 70, 90])
+    perturbation_percentages: List[int] = field(
+        default_factory=lambda: [5, 10, 20, 30, 50, 70, 90]
+    )
     insertion_deletion_steps: int = 50
     aopc_steps: int = 10
     faithfulness_samples: int = 30
-    
+
     # Output settings
     output_dir: str = "./outputs/xai_experiments/comparison"
     save_visualizations: bool = True
-    
+
     # Backward compatibility - single dataset mode
     image_dataset: str = "cifar10"  # Default for single dataset mode
     text_dataset: str = "sst2"  # Default for single dataset mode
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
-            k: v if not isinstance(v, list) else v
-            for k, v in self.__dict__.items()
+            k: v if not isinstance(v, list) else v for k, v in self.__dict__.items()
         }
-    
+
     def get_supported_datasets(self) -> Dict[str, List[str]]:
         """Get lists of supported datasets."""
         return {
@@ -136,28 +141,34 @@ class XAIMethodsComparison:
                     self.config.output_dir = value
         else:
             self.config = config
-        
+
         self.output_dir = self.config.output_dir
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.results = {
             "timestamp": datetime.now().isoformat(),
-            "config": self.config.to_dict() if hasattr(self.config, 'to_dict') else self.config,
+            "config": self.config.to_dict()
+            if hasattr(self.config, "to_dict")
+            else self.config,
             "image_experiments": {},
             "text_experiments": {},
             "metrics": {},
             "datasets_used": {
-                "image": self.config.image_datasets if hasattr(self.config, 'image_datasets') else [self.config.image_dataset],
-                "text": self.config.text_datasets if hasattr(self.config, 'text_datasets') else [self.config.text_dataset],
-            }
+                "image": self.config.image_datasets
+                if hasattr(self.config, "image_datasets")
+                else [self.config.image_dataset],
+                "text": self.config.text_datasets
+                if hasattr(self.config, "text_datasets")
+                else [self.config.text_dataset],
+            },
         }
-        
+
         # Initialize visualizer lazily
         self._visualizer = None
-        
+
         # Compute data directory path
         self._data_dir = self._compute_data_dir()
-    
+
     def _compute_data_dir(self) -> str:
         """Compute the data directory path."""
         # Default data dir is relative to output_dir parent
@@ -165,14 +176,16 @@ class XAIMethodsComparison:
         if output_parent and os.path.isdir(output_parent):
             return os.path.join(output_parent, "data")
         return "./data"
-    
+
     def _get_config_value(self, attr_name: str, default_value):
         """Safely get a config value with fallback to default."""
         if hasattr(self.config, attr_name):
             return getattr(self.config, attr_name)
         return default_value
 
-    def run_image_comparison(self, skip_training: bool = False, dataset: str = "cifar10") -> Dict[str, Any]:
+    def run_image_comparison(
+        self, skip_training: bool = False, dataset: str = "cifar10"
+    ) -> Dict[str, Any]:
         """Run image-based XAI comparison on a specific dataset.
 
         Compares GradCAM vs DiET with comprehensive metrics.
@@ -205,7 +218,9 @@ class XAIMethodsComparison:
             "batch_size": self._get_config_value("image_batch_size", 64),
             "max_samples": self._get_config_value("image_max_samples", 3000),
             "baseline_epochs": self._get_config_value("image_epochs", 3),
-            "comparison_samples": self._get_config_value("image_comparison_samples", 16),
+            "comparison_samples": self._get_config_value(
+                "image_comparison_samples", 16
+            ),
             "upsample_factor": self._get_config_value("diet_upsample_factor", 4),
             "rounding_steps": self._get_config_value("diet_rounding_steps", 2),
             "dataset": dataset,  # Pass dataset name
@@ -227,11 +242,11 @@ class XAIMethodsComparison:
             "improvement": results["comparison"]["improvement"],
             "diet_better": results["comparison"]["improvement"] > 0,
         }
-        
+
         # Store results by dataset name
         if dataset not in self.results["image_experiments"]:
             self.results["image_experiments"][dataset] = dataset_results
-        
+
         return dataset_results
 
     def run_all_image_comparisons(self, skip_training: bool = False) -> Dict[str, Any]:
@@ -245,24 +260,28 @@ class XAIMethodsComparison:
         """
         image_datasets = self._get_config_value("image_datasets", ["cifar10"])
         all_results = {}
-        
+
         print("\n" + "=" * 70)
         print(f"RUNNING IMAGE COMPARISONS ON {len(image_datasets)} DATASETS")
         print(f"Datasets: {', '.join(image_datasets)}")
         print("=" * 70)
-        
+
         for dataset in image_datasets:
             try:
-                results = self.run_image_comparison(skip_training=skip_training, dataset=dataset)
+                results = self.run_image_comparison(
+                    skip_training=skip_training, dataset=dataset
+                )
                 all_results[dataset] = results
             except Exception as e:
                 print(f"Error running {dataset}: {e}")
                 traceback.print_exc()
                 all_results[dataset] = {"error": str(e)}
-        
+
         return all_results
 
-    def run_text_comparison(self, skip_training: bool = False, dataset: str = "sst2") -> Dict[str, Any]:
+    def run_text_comparison(
+        self, skip_training: bool = False, dataset: str = "sst2"
+    ) -> Dict[str, Any]:
         """Run text-based XAI comparison on a specific dataset.
 
         Compares Integrated Gradients vs DiET with token-level analysis.
@@ -286,7 +305,9 @@ class XAIMethodsComparison:
             "device": self._get_config_value("device", "cuda"),
             "data_dir": self._data_dir,
             "output_dir": os.path.join(self.output_dir, dataset),
-            "model_name": self._get_config_value("text_model_name", "bert-base-uncased"),
+            "model_name": self._get_config_value(
+                "text_model_name", "bert-base-uncased"
+            ),
             "max_length": self._get_config_value("text_max_length", 128),
             "max_samples": self._get_config_value("text_max_samples", 1000),
             "epochs": self._get_config_value("text_epochs", 2),
@@ -304,7 +325,7 @@ class XAIMethodsComparison:
             "ig_diet_overlap": results["comparison"]["mean_top_k_overlap"],
             "samples_compared": results["comparison"]["num_samples"],
         }
-        
+
         # Store results by dataset name
         if dataset not in self.results["text_experiments"]:
             self.results["text_experiments"][dataset] = dataset_results
@@ -322,21 +343,23 @@ class XAIMethodsComparison:
         """
         text_datasets = self._get_config_value("text_datasets", ["sst2"])
         all_results = {}
-        
+
         print("\n" + "=" * 70)
         print(f"RUNNING TEXT COMPARISONS ON {len(text_datasets)} DATASETS")
         print(f"Datasets: {', '.join(text_datasets)}")
         print("=" * 70)
-        
+
         for dataset in text_datasets:
             try:
-                results = self.run_text_comparison(skip_training=skip_training, dataset=dataset)
+                results = self.run_text_comparison(
+                    skip_training=skip_training, dataset=dataset
+                )
                 all_results[dataset] = results
             except Exception as e:
                 print(f"Error running {dataset}: {e}")
                 traceback.print_exc()
                 all_results[dataset] = {"error": str(e)}
-        
+
         return all_results
 
     def generate_summary_report(self) -> str:
@@ -345,8 +368,12 @@ class XAIMethodsComparison:
         Returns:
             Report as formatted string
         """
-        device = self.config.device if hasattr(self.config, 'device') else self.config.get('device', 'cuda')
-        
+        device = (
+            self.config.device
+            if hasattr(self.config, "device")
+            else self.config.get("device", "cuda")
+        )
+
         report = []
         report.append("=" * 70)
         report.append("XAI METHODS COMPARISON REPORT - MULTI-DATASET")
@@ -354,36 +381,52 @@ class XAIMethodsComparison:
         report.append("=" * 70)
         report.append(f"\nGenerated: {self.results['timestamp']}")
         report.append(f"Device: {device}")
-        
+
         # Image datasets
         if self.results["image_experiments"]:
             report.append("\n" + "=" * 50)
             report.append("IMAGE CLASSIFICATION RESULTS")
             report.append("=" * 50)
-            
+
             for dataset_name, img in self.results["image_experiments"].items():
                 if "error" in img:
                     report.append(f"\n{dataset_name.upper()}: Error - {img['error']}")
                     continue
-                    
+
                 report.append(f"\n--- {dataset_name.upper()} ---")
-                report.append(f"  Baseline Accuracy: {img.get('baseline_accuracy', 'N/A'):.2f}%")
-                report.append(f"  DiET Accuracy: {img.get('diet_accuracy', 'N/A'):.2f}%")
-                report.append(f"  GradCAM Score: {img.get('gradcam_mean_score', 'N/A'):.4f}")
+                report.append(
+                    f"  Baseline Accuracy: {img.get('baseline_accuracy', 'N/A'):.2f}%"
+                )
+                report.append(
+                    f"  DiET Accuracy: {img.get('diet_accuracy', 'N/A'):.2f}%"
+                )
+                report.append(
+                    f"  GradCAM Score: {img.get('gradcam_mean_score', 'N/A'):.4f}"
+                )
                 report.append(f"  DiET Score: {img.get('diet_mean_score', 'N/A'):.4f}")
 
                 if img.get("diet_better"):
-                    report.append(f"  ✓ DiET IMPROVES by {img.get('improvement', 0):.4f}")
+                    report.append(
+                        f"  ✓ DiET IMPROVES by {img.get('improvement', 0):.4f}"
+                    )
                 else:
                     report.append(f"  → GradCAM performs better")
-            
+
             # Summary statistics
             if len(self.results["image_experiments"]) > 1:
                 report.append("\n--- SUMMARY ---")
-                diet_wins = sum(1 for ds in self.results["image_experiments"].values() 
-                               if ds.get("diet_better", False))
-                total = len([ds for ds in self.results["image_experiments"].values() 
-                            if "error" not in ds])
+                diet_wins = sum(
+                    1
+                    for ds in self.results["image_experiments"].values()
+                    if ds.get("diet_better", False)
+                )
+                total = len(
+                    [
+                        ds
+                        for ds in self.results["image_experiments"].values()
+                        if "error" not in ds
+                    ]
+                )
                 report.append(f"  DiET better on {diet_wins}/{total} datasets")
 
         # Text datasets
@@ -391,35 +434,45 @@ class XAIMethodsComparison:
             report.append("\n" + "=" * 50)
             report.append("TEXT CLASSIFICATION RESULTS")
             report.append("=" * 50)
-            
+
             for dataset_name, txt in self.results["text_experiments"].items():
                 if "error" in txt:
                     report.append(f"\n{dataset_name.upper()}: Error - {txt['error']}")
                     continue
-                    
+
                 report.append(f"\n--- {dataset_name.upper()} ---")
-                report.append(f"  Baseline Accuracy: {txt.get('baseline_accuracy', 'N/A'):.2f}%")
-                report.append(f"  IG-DiET Overlap: {txt.get('ig_diet_overlap', 'N/A'):.4f}")
-                report.append(f"  Samples Compared: {txt.get('samples_compared', 'N/A')}")
+                report.append(
+                    f"  Baseline Accuracy: {txt.get('baseline_accuracy', 'N/A'):.2f}%"
+                )
+                report.append(
+                    f"  IG-DiET Overlap: {txt.get('ig_diet_overlap', 'N/A'):.4f}"
+                )
+                report.append(
+                    f"  Samples Compared: {txt.get('samples_compared', 'N/A')}"
+                )
 
                 overlap = txt.get("ig_diet_overlap", 0)
                 if overlap > 0.5:
                     report.append("  → High agreement between methods")
                 else:
                     report.append("  → Methods identify different features")
-            
+
             # Summary statistics
             if len(self.results["text_experiments"]) > 1:
                 report.append("\n--- SUMMARY ---")
-                avg_overlap = np.mean([ds.get("ig_diet_overlap", 0) 
-                                       for ds in self.results["text_experiments"].values() 
-                                       if "error" not in ds])
+                avg_overlap = np.mean(
+                    [
+                        ds.get("ig_diet_overlap", 0)
+                        for ds in self.results["text_experiments"].values()
+                        if "error" not in ds
+                    ]
+                )
                 report.append(f"  Average IG-DiET Overlap: {avg_overlap:.4f}")
-        
+
         # Store report in results
         report_str = "\n".join(report)
         self.results["summary"] = {"report": report_str}
-        
+
         return report_str
 
     def save_results(self) -> str:
@@ -461,9 +514,17 @@ class XAIMethodsComparison:
 
     def _create_summary_visualization(self) -> None:
         """Create summary visualization charts for multi-dataset results."""
-        num_image_datasets = len(self.results["image_experiments"]) if self.results["image_experiments"] else 0
-        num_text_datasets = len(self.results["text_experiments"]) if self.results["text_experiments"] else 0
-        
+        num_image_datasets = (
+            len(self.results["image_experiments"])
+            if self.results["image_experiments"]
+            else 0
+        )
+        num_text_datasets = (
+            len(self.results["text_experiments"])
+            if self.results["text_experiments"]
+            else 0
+        )
+
         # Create figure with subplots for each dataset
         fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
@@ -472,7 +533,7 @@ class XAIMethodsComparison:
             datasets = list(self.results["image_experiments"].keys())
             gradcam_scores = []
             diet_scores = []
-            
+
             for ds in datasets:
                 data = self.results["image_experiments"][ds]
                 if "gradcam_mean_score" in data:
@@ -481,31 +542,49 @@ class XAIMethodsComparison:
                 else:
                     gradcam_scores.append(0)
                     diet_scores.append(0)
-            
+
             x = np.arange(len(datasets))
             width = 0.35
-            
-            bars1 = axes[0].bar(x - width/2, gradcam_scores, width, label='GradCAM', color='#2196F3')
-            bars2 = axes[0].bar(x + width/2, diet_scores, width, label='DiET', color='#4CAF50')
-            
+
+            bars1 = axes[0].bar(
+                x - width / 2, gradcam_scores, width, label="GradCAM", color="#2196F3"
+            )
+            bars2 = axes[0].bar(
+                x + width / 2, diet_scores, width, label="DiET", color="#4CAF50"
+            )
+
             axes[0].set_ylabel("Pixel Perturbation Score")
-            axes[0].set_title("Image Attribution Quality Across Datasets\n(Higher = Better)")
+            axes[0].set_title(
+                "Image Attribution Quality Across Datasets\n(Higher = Better)"
+            )
             axes[0].set_xticks(x)
             axes[0].set_xticklabels([ds.upper() for ds in datasets], rotation=45)
             axes[0].legend()
             axes[0].set_ylim(0, 1)
-            
+
             # Add value labels
             for bar in bars1:
                 height = bar.get_height()
                 if height > 0:
-                    axes[0].text(bar.get_x() + bar.get_width()/2., height,
-                                f'{height:.2f}', ha='center', va='bottom', fontsize=8)
+                    axes[0].text(
+                        bar.get_x() + bar.get_width() / 2.0,
+                        height,
+                        f"{height:.2f}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=8,
+                    )
             for bar in bars2:
                 height = bar.get_height()
                 if height > 0:
-                    axes[0].text(bar.get_x() + bar.get_width()/2., height,
-                                f'{height:.2f}', ha='center', va='bottom', fontsize=8)
+                    axes[0].text(
+                        bar.get_x() + bar.get_width() / 2.0,
+                        height,
+                        f"{height:.2f}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=8,
+                    )
         else:
             axes[0].text(0.5, 0.5, "No image experiments run", ha="center", va="center")
             axes[0].set_title("Image Attribution Quality")
@@ -514,23 +593,28 @@ class XAIMethodsComparison:
         if num_text_datasets > 0:
             datasets = list(self.results["text_experiments"].keys())
             overlaps = []
-            
+
             for ds in datasets:
                 data = self.results["text_experiments"][ds]
                 if "ig_diet_overlap" in data:
                     overlaps.append(data["ig_diet_overlap"])
                 else:
                     overlaps.append(0)
-            
-            bars = axes[1].barh(datasets, overlaps, color='#FF9800')
+
+            bars = axes[1].barh(datasets, overlaps, color="#FF9800")
             axes[1].set_xlim(0, 1)
             axes[1].set_title("Text Attribution Comparison\n(IG-DiET Token Overlap)")
             axes[1].set_xlabel("Top-k Token Overlap")
-            
+
             for bar, val in zip(bars, overlaps):
                 if val > 0:
-                    axes[1].text(val + 0.02, bar.get_y() + bar.get_height()/2.,
-                                f'{val:.3f}', va='center', fontsize=9)
+                    axes[1].text(
+                        val + 0.02,
+                        bar.get_y() + bar.get_height() / 2.0,
+                        f"{val:.3f}",
+                        va="center",
+                        fontsize=9,
+                    )
         else:
             axes[1].text(0.5, 0.5, "No text experiments run", ha="center", va="center")
             axes[1].set_title("Text Attribution Comparison")
@@ -562,13 +646,13 @@ class XAIMethodsComparison:
         print("=" * 70)
         print("XAI METHODS COMPARISON PIPELINE")
         print("DiET vs Basic XAI Methods (GradCAM, Integrated Gradients)")
-        
+
         # Show datasets to be used
         image_datasets = self._get_config_value("image_datasets", ["cifar10"])
         text_datasets = self._get_config_value("text_datasets", ["sst2"])
         print(f"\nImage datasets: {', '.join(image_datasets)}")
         print(f"Text datasets: {', '.join(text_datasets)}")
-        
+
         if skip_training:
             print("(Using previously trained models if available)")
         print("=" * 70)
@@ -600,21 +684,19 @@ class XAIMethodsComparison:
         print(f"\nTotal comparison time: {total_time / 60:.1f} minutes")
 
         return self.results
-    
+
     def visualize_results(
-        self,
-        save_plots: bool = True,
-        show: bool = False
+        self, save_plots: bool = True, show: bool = False
     ) -> Dict[str, Any]:
         """Generate comprehensive visualizations of comparison results.
-        
+
         This method creates all visualizations for the comparison results,
         including bar charts, radar plots, and HTML reports.
-        
+
         Args:
             save_plots: Whether to save plots to disk
             show: Whether to display plots (for notebooks)
-            
+
         Returns:
             Dictionary with paths to generated visualizations
         """
@@ -624,117 +706,123 @@ class XAIMethodsComparison:
             # Fallback to basic visualization
             print("Advanced visualization not available, using basic plots")
             self._create_summary_visualization()
-            return {"summary_plot": os.path.join(self.output_dir, "comparison_summary.png")}
-        
+            return {
+                "summary_plot": os.path.join(self.output_dir, "comparison_summary.png")
+            }
+
         visualizer = ComparisonVisualizer(output_dir=self.output_dir)
         generated_files = {}
-        
+
         # Prepare metric results for plotting
         if self.results["image_experiments"]:
             img = self.results["image_experiments"]
             image_metrics = {
                 "GradCAM": {"perturbation_score": img.get("gradcam_mean_score", 0)},
-                "DiET": {"perturbation_score": img.get("diet_mean_score", 0)}
+                "DiET": {"perturbation_score": img.get("diet_mean_score", 0)},
             }
-            
+
             # Bar chart comparison
             fig = visualizer.plot_metric_comparison_bar(
                 image_metrics,
                 title="Image Attribution Quality (CIFAR-10): DiET vs GradCAM",
                 save_name="image_metric_comparison",
-                show=show
+                show=show,
             )
             generated_files["image_bar_chart"] = os.path.join(
                 self.output_dir, "image_metric_comparison.png"
             )
             plt.close(fig)
-            
+
             # Perturbation curve if available
             if "gradcam_perturbation" in img and "diet_perturbation" in img:
                 perturbation_results = {
                     "GradCAM": img["gradcam_perturbation"],
-                    "DiET": img["diet_perturbation"]
+                    "DiET": img["diet_perturbation"],
                 }
                 fig = visualizer.plot_perturbation_curve(
                     perturbation_results,
                     title="Pixel Perturbation Analysis",
                     save_name="perturbation_curves",
-                    show=show
+                    show=show,
                 )
                 generated_files["perturbation_curves"] = os.path.join(
                     self.output_dir, "perturbation_curves.png"
                 )
                 plt.close(fig)
-        
+
         # Create summary dashboard
         fig = visualizer.create_summary_dashboard(
             image_results=self.results.get("image_experiments"),
             text_results=self.results.get("text_experiments"),
             save_name="comparison_dashboard",
-            show=show
+            show=show,
         )
         generated_files["dashboard"] = os.path.join(
             self.output_dir, "comparison_dashboard.png"
         )
         plt.close(fig)
-        
+
         # Generate HTML report
         html_path = visualizer.generate_html_report(
             self.results,
             report_title="DiET vs Basic XAI Methods Comparison",
-            save_name="comparison_report"
+            save_name="comparison_report",
         )
         generated_files["html_report"] = html_path
-        
-        print(f"\nVisualization files generated:")
+
+        print("\nVisualization files generated:")
         for name, path in generated_files.items():
             print(f"  - {name}: {path}")
-        
+
         return generated_files
-    
+
     def get_results_dataframe(self):
         """Get results as a pandas DataFrame for easy analysis in notebooks.
-        
+
         Returns:
             pandas DataFrame with comparison results
         """
         import pandas as pd
-        
+
         data = []
-        
+
         # Process all image datasets
         if self.results["image_experiments"]:
             for dataset_name, img in self.results["image_experiments"].items():
                 if "error" in img:
                     continue
-                data.append({
-                    "Modality": "Image",
-                    "Dataset": dataset_name.upper(),
-                    "Method 1": "GradCAM",
-                    "Method 2": "DiET",
-                    "GradCAM Score": img.get("gradcam_mean_score", 0),
-                    "DiET Score": img.get("diet_mean_score", 0),
-                    "Improvement": img.get("improvement", 0),
-                    "DiET Better": img.get("diet_better", False),
-                    "Baseline Accuracy": img.get("baseline_accuracy", 0),
-                    "DiET Accuracy": img.get("diet_accuracy", 0),
-                })
-        
+                data.append(
+                    {
+                        "Modality": "Image",
+                        "Dataset": dataset_name.upper(),
+                        "Method 1": "GradCAM",
+                        "Method 2": "DiET",
+                        "GradCAM Score": img.get("gradcam_mean_score", 0),
+                        "DiET Score": img.get("diet_mean_score", 0),
+                        "Improvement": img.get("improvement", 0),
+                        "DiET Better": img.get("diet_better", False),
+                        "Baseline Accuracy": img.get("baseline_accuracy", 0),
+                        "DiET Accuracy": img.get("diet_accuracy", 0),
+                    }
+                )
+
         # Process all text datasets
         if self.results["text_experiments"]:
             for dataset_name, txt in self.results["text_experiments"].items():
                 if "error" in txt:
                     continue
-                data.append({
-                    "Modality": "Text",
-                    "Dataset": dataset_name.upper(),
-                    "Method 1": "IG",
-                    "Method 2": "DiET",
-                    "IG-DiET Overlap": txt.get("ig_diet_overlap", 0),
-                    "Samples Compared": txt.get("samples_compared", 0),
-                    "Baseline Accuracy": txt.get("baseline_accuracy", 0),
-                })
-        
+                data.append(
+                    {
+                        "Modality": "Text",
+                        "Dataset": dataset_name.upper(),
+                        "Method 1": "IG",
+                        "Method 2": "DiET",
+                        "IG-DiET Overlap": txt.get("ig_diet_overlap", 0),
+                        "Samples Compared": txt.get("samples_compared", 0),
+                        "Baseline Accuracy": txt.get("baseline_accuracy", 0),
+                    }
+                )
+
         return pd.DataFrame(data)
 
 

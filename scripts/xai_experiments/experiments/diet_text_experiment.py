@@ -6,7 +6,8 @@ Integrated Gradients.
 
 Supports resumable training via checkpoint snapshots.
 
-Reference: Bhalla et al., "Discriminative Feature Attributions", NeurIPS 2023
+Reference: Bhalla et al., "Discriminative Feature Attributions:
+Bridging Post Hoc Explainability and Inherent Interpretability", NeurIPS 2023
 """
 
 import os
@@ -18,13 +19,14 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Any, Tuple, List
 from tqdm import tqdm
 
 try:
     from ..utils.checkpointing import CheckpointManager
 except ImportError:
     import sys
+
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from utils.checkpointing import CheckpointManager
 
@@ -237,12 +239,14 @@ class DiETTextExperiment:
         self.test_labels = None
 
         self.results = {}
-        
+
         # Initialize checkpoint manager for resumable training
         checkpoint_dir = os.path.join(self.output_dir, "checkpoints")
         self.checkpoint_manager = CheckpointManager(checkpoint_dir=checkpoint_dir)
         dataset_name = config.get("dataset", "sst2")
-        self.experiment_name = config.get("experiment_name", f"diet_text_{dataset_name}")
+        self.experiment_name = config.get(
+            "experiment_name", f"diet_text_{dataset_name}"
+        )
 
     def _init_model(self):
         """Initialize BERT model."""
@@ -295,7 +299,9 @@ class DiETTextExperiment:
         print(f"Training samples: {len(self.train_labels)}")
         print(f"Test samples: {len(self.test_texts)}")
 
-    def train_baseline(self, epochs: int = 2, save_checkpoint_every: int = 1) -> Dict[str, Any]:
+    def train_baseline(
+        self, epochs: int = 2, save_checkpoint_every: int = 1
+    ) -> Dict[str, Any]:
         """Train baseline BERT model with checkpoint support.
 
         Training can be resumed from the last checkpoint if interrupted.
@@ -309,7 +315,7 @@ class DiETTextExperiment:
         """
         checkpoint_name = f"{self.experiment_name}_baseline"
         start_epoch = 0
-        
+
         print("\nFine-tuning BERT baseline...")
 
         self._init_model()
@@ -323,13 +329,17 @@ class DiETTextExperiment:
         optimizer = optim.AdamW(self.model.get_parameters(), lr=2e-5)
 
         history = {"train_loss": [], "train_acc": []}
-        
+
         # Check for existing checkpoint
         if self.checkpoint_manager.has_checkpoint(checkpoint_name):
             print("Found checkpoint, resuming training...")
-            checkpoint = self.checkpoint_manager.load_checkpoint(checkpoint_name, self.device)
+            checkpoint = self.checkpoint_manager.load_checkpoint(
+                checkpoint_name, self.device
+            )
             if checkpoint:
-                self.model.load_state_dict_from_checkpoint(checkpoint["model_state_dict"])
+                self.model.load_state_dict_from_checkpoint(
+                    checkpoint["model_state_dict"]
+                )
                 optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
                 start_epoch = checkpoint["epoch"] + 1
                 history = checkpoint.get("extra_state", {}).get("history", history)
@@ -367,7 +377,7 @@ class DiETTextExperiment:
 
             history["train_loss"].append(train_loss / len(train_loader))
             history["train_acc"].append(100 * correct / total)
-            
+
             # Save checkpoint
             if (epoch + 1) % save_checkpoint_every == 0 or epoch == epochs - 1:
                 self.checkpoint_manager.save_checkpoint(
@@ -376,12 +386,12 @@ class DiETTextExperiment:
                     model_state_dict=self.model.get_state_dict(),
                     optimizer_state_dict=optimizer.state_dict(),
                     metrics={"train_acc": history["train_acc"][-1]},
-                    extra_state={"history": history}
+                    extra_state={"history": history},
                 )
 
         baseline_path = os.path.join(self.output_dir, "bert_baseline")
         self.model.save_model(baseline_path)
-        
+
         # Clean up checkpoint after successful completion
         self.checkpoint_manager.delete_checkpoint(checkpoint_name)
 

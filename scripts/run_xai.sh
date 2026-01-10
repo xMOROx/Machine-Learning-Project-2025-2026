@@ -163,7 +163,7 @@ log_info "GPU: ${GPU}"
 [ -z "${DIET_IMAGES}" ] && [ -z "${DIET_TEXT}" ] && log_info "Mode: Full comparison (Images + Text)"
 log_info "==================================================="
 
-cd "${PROJECT_ROOT}"
+cd "${PROJECT_ROOT}" || exit 1
 
 log_info "Starting DiET comparison..."
 python3 "${XAI_DIR}/run_xai_experiments.py" \

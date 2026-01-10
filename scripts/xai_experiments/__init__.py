@@ -1,6 +1,6 @@
 """XAI Comparison Framework - DiET vs GradCAM/IG.
 
-This package provides a comprehensive framework for comparing 
+This package provides a comprehensive framework for comparing
 Discriminative Feature Attribution (DiET) with basic XAI methods:
 
 - **Images**: DiET vs GradCAM on CIFAR-10, CIFAR-100, SVHN, Fashion-MNIST
@@ -36,7 +36,7 @@ from .utils.checkpointing import CheckpointManager, get_default_checkpoint_manag
 
 __all__ = [
     "XAIMethodsComparison",
-    "ComparisonConfig", 
+    "ComparisonConfig",
     "run_diet_comparison",
     "CheckpointManager",
     "get_default_checkpoint_manager",

@@ -2,17 +2,15 @@
 
 Supported datasets:
 - CIFAR-10: 10 classes, 32x32 color images
-- CIFAR-100: 100 classes, 32x32 color images  
+- CIFAR-100: 100 classes, 32x32 color images
 - SVHN: 10 classes (digits 0-9), 32x32 color images from street view
 - Fashion-MNIST: 10 classes, grayscale images resized to 32x32
 """
 
-import torch
-from torch.utils.data import Dataset, DataLoader, Subset
+from torch.utils.data import DataLoader, Subset
 import torchvision
 import torchvision.transforms as transforms
 from typing import Tuple, Optional, Dict, Any
-import numpy as np
 
 
 SUPPORTED_IMAGE_DATASETS = ["cifar10", "cifar100", "svhn", "fashion_mnist"]
@@ -20,7 +18,7 @@ SUPPORTED_IMAGE_DATASETS = ["cifar10", "cifar100", "svhn", "fashion_mnist"]
 
 class BaseImageDataset:
     """Base class for image datasets."""
-    
+
     def __init__(
         self,
         data_dir: str = "./data",
@@ -34,23 +32,27 @@ class BaseImageDataset:
         self.test_dataset = None
         self.num_classes = 10
         self.class_names = []
-        
+
     def get_transforms(self) -> Tuple[transforms.Compose, transforms.Compose]:
         """Get train and test transforms."""
-        train_transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomCrop(self.image_size, padding=4),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ])
-        
-        test_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ])
-        
+        train_transform = transforms.Compose(
+            [
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomCrop(self.image_size, padding=4),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
+
+        test_transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
+
         return train_transform, test_transform
-    
+
     def get_dataloaders(
         self, batch_size: int = 64, num_workers: int = 4
     ) -> Tuple[DataLoader, DataLoader]:
@@ -68,7 +70,7 @@ class BaseImageDataset:
             num_workers=num_workers,
         )
         return train_loader, test_loader
-    
+
     def get_info(self) -> Dict[str, Any]:
         """Get dataset information."""
         return {
@@ -83,10 +85,10 @@ class BaseImageDataset:
 
 class CIFAR10Dataset(BaseImageDataset):
     """CIFAR-10 dataset wrapper.
-    
+
     10 classes: airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck
     """
-    
+
     def __init__(
         self,
         data_dir: str = "./data",
@@ -96,28 +98,36 @@ class CIFAR10Dataset(BaseImageDataset):
         super().__init__(data_dir, max_samples, image_size)
         self.num_classes = 10
         self.class_names = [
-            "airplane", "automobile", "bird", "cat", "deer",
-            "dog", "frog", "horse", "ship", "truck"
+            "airplane",
+            "automobile",
+            "bird",
+            "cat",
+            "deer",
+            "dog",
+            "frog",
+            "horse",
+            "ship",
+            "truck",
         ]
         self._load_data()
-    
+
     def _load_data(self):
         train_transform, test_transform = self.get_transforms()
-        
+
         self.train_dataset = torchvision.datasets.CIFAR10(
             root=self.data_dir,
             train=True,
             download=True,
             transform=train_transform,
         )
-        
+
         self.test_dataset = torchvision.datasets.CIFAR10(
             root=self.data_dir,
             train=False,
             download=True,
             transform=test_transform,
         )
-        
+
         if self.max_samples:
             indices = list(range(min(self.max_samples, len(self.train_dataset))))
             self.train_dataset = Subset(self.train_dataset, indices)
@@ -125,10 +135,10 @@ class CIFAR10Dataset(BaseImageDataset):
 
 class CIFAR100Dataset(BaseImageDataset):
     """CIFAR-100 dataset wrapper.
-    
+
     100 classes organized into 20 superclasses.
     """
-    
+
     def __init__(
         self,
         data_dir: str = "./data",
@@ -140,24 +150,24 @@ class CIFAR100Dataset(BaseImageDataset):
         # CIFAR-100 has 100 fine classes
         self.class_names = [f"class_{i}" for i in range(100)]
         self._load_data()
-    
+
     def _load_data(self):
         train_transform, test_transform = self.get_transforms()
-        
+
         self.train_dataset = torchvision.datasets.CIFAR100(
             root=self.data_dir,
             train=True,
             download=True,
             transform=train_transform,
         )
-        
+
         self.test_dataset = torchvision.datasets.CIFAR100(
             root=self.data_dir,
             train=False,
             download=True,
             transform=test_transform,
         )
-        
+
         if self.max_samples:
             indices = list(range(min(self.max_samples, len(self.train_dataset))))
             self.train_dataset = Subset(self.train_dataset, indices)
@@ -165,10 +175,10 @@ class CIFAR100Dataset(BaseImageDataset):
 
 class SVHNDataset(BaseImageDataset):
     """Street View House Numbers (SVHN) dataset wrapper.
-    
+
     10 classes: digits 0-9 from Google Street View.
     """
-    
+
     def __init__(
         self,
         data_dir: str = "./data",
@@ -179,24 +189,24 @@ class SVHNDataset(BaseImageDataset):
         self.num_classes = 10
         self.class_names = [str(i) for i in range(10)]
         self._load_data()
-    
+
     def _load_data(self):
         train_transform, test_transform = self.get_transforms()
-        
+
         self.train_dataset = torchvision.datasets.SVHN(
             root=self.data_dir,
             split="train",
             download=True,
             transform=train_transform,
         )
-        
+
         self.test_dataset = torchvision.datasets.SVHN(
             root=self.data_dir,
             split="test",
             download=True,
             transform=test_transform,
         )
-        
+
         if self.max_samples:
             indices = list(range(min(self.max_samples, len(self.train_dataset))))
             self.train_dataset = Subset(self.train_dataset, indices)
@@ -204,12 +214,12 @@ class SVHNDataset(BaseImageDataset):
 
 class FashionMNISTDataset(BaseImageDataset):
     """Fashion-MNIST dataset wrapper.
-    
+
     10 classes: T-shirt/top, Trouser, Pullover, Dress, Coat,
                 Sandal, Shirt, Sneaker, Bag, Ankle boot
     Grayscale images converted to 3-channel and resized to 32x32.
     """
-    
+
     def __init__(
         self,
         data_dir: str = "./data",
@@ -219,47 +229,59 @@ class FashionMNISTDataset(BaseImageDataset):
         super().__init__(data_dir, max_samples, image_size)
         self.num_classes = 10
         self.class_names = [
-            "T-shirt/top", "Trouser", "Pullover", "Dress", "Coat",
-            "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot"
+            "T-shirt/top",
+            "Trouser",
+            "Pullover",
+            "Dress",
+            "Coat",
+            "Sandal",
+            "Shirt",
+            "Sneaker",
+            "Bag",
+            "Ankle boot",
         ]
         self._load_data()
-    
+
     def get_transforms(self) -> Tuple[transforms.Compose, transforms.Compose]:
         """Get transforms for grayscale to RGB conversion."""
-        train_transform = transforms.Compose([
-            transforms.Resize((self.image_size, self.image_size)),
-            transforms.Grayscale(num_output_channels=3),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ])
-        
-        test_transform = transforms.Compose([
-            transforms.Resize((self.image_size, self.image_size)),
-            transforms.Grayscale(num_output_channels=3),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ])
-        
+        train_transform = transforms.Compose(
+            [
+                transforms.Resize((self.image_size, self.image_size)),
+                transforms.Grayscale(num_output_channels=3),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
+
+        test_transform = transforms.Compose(
+            [
+                transforms.Resize((self.image_size, self.image_size)),
+                transforms.Grayscale(num_output_channels=3),
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
+
         return train_transform, test_transform
-    
+
     def _load_data(self):
         train_transform, test_transform = self.get_transforms()
-        
+
         self.train_dataset = torchvision.datasets.FashionMNIST(
             root=self.data_dir,
             train=True,
             download=True,
             transform=train_transform,
         )
-        
+
         self.test_dataset = torchvision.datasets.FashionMNIST(
             root=self.data_dir,
             train=False,
             download=True,
             transform=test_transform,
         )
-        
+
         if self.max_samples:
             indices = list(range(min(self.max_samples, len(self.train_dataset))))
             self.train_dataset = Subset(self.train_dataset, indices)
@@ -271,20 +293,20 @@ def get_image_dataset(
     max_samples: Optional[int] = None,
 ) -> BaseImageDataset:
     """Factory function to get image dataset by name.
-    
+
     Args:
         name: Dataset name (cifar10, cifar100, svhn, fashion_mnist)
         data_dir: Directory to store/load data
         max_samples: Maximum number of training samples
-        
+
     Returns:
         Dataset wrapper instance
-        
+
     Raises:
         ValueError: If dataset name is not supported
     """
     name = name.lower()
-    
+
     if name == "cifar10":
         return CIFAR10Dataset(data_dir, max_samples)
     elif name == "cifar100":
@@ -295,6 +317,5 @@ def get_image_dataset(
         return FashionMNISTDataset(data_dir, max_samples)
     else:
         raise ValueError(
-            f"Unsupported image dataset: {name}. "
-            f"Supported: {SUPPORTED_IMAGE_DATASETS}"
+            f"Unsupported image dataset: {name}. Supported: {SUPPORTED_IMAGE_DATASETS}"
         )

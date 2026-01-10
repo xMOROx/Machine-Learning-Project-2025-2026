@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader, Dataset
 import torchvision
 import torchvision.transforms as transforms
 import numpy as np
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from tqdm import tqdm
 
 
@@ -360,7 +360,7 @@ class DiETExperiment:
         self.test_labels = None
 
         self.results = {}
-        
+
         # Initialize checkpoint manager for resumable training
         checkpoint_dir = os.path.join(self.output_dir, "checkpoints")
         self.checkpoint_manager = CheckpointManager(checkpoint_dir=checkpoint_dir)
@@ -421,7 +421,9 @@ class DiETExperiment:
         print(f"Training samples (DiET): {len(self.train_images)}")
         print(f"Test samples (DiET): {len(self.test_images)}")
 
-    def train_baseline(self, epochs: int = 5, save_checkpoint_every: int = 1) -> Dict[str, Any]:
+    def train_baseline(
+        self, epochs: int = 5, save_checkpoint_every: int = 1
+    ) -> Dict[str, Any]:
         """Train baseline model on CIFAR-10 with checkpoint support.
 
         Training can be resumed from the last checkpoint if interrupted.
@@ -435,19 +437,21 @@ class DiETExperiment:
         """
         checkpoint_name = f"{self.experiment_name}_baseline"
         start_epoch = 0
-        
+
         print(f"\nTraining baseline {self.model_type} model...")
-        
+
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
         history = {"train_loss": [], "train_acc": [], "test_acc": []}
-        
+
         # Check for existing checkpoint
         if self.checkpoint_manager.has_checkpoint(checkpoint_name):
             print("Found checkpoint, resuming training...")
-            checkpoint = self.checkpoint_manager.load_checkpoint(checkpoint_name, self.device)
+            checkpoint = self.checkpoint_manager.load_checkpoint(
+                checkpoint_name, self.device
+            )
             if checkpoint:
                 self.model.load_state_dict(checkpoint["model_state_dict"])
                 optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -496,7 +500,7 @@ class DiETExperiment:
             print(
                 f"Epoch {epoch + 1}: Train Acc: {history['train_acc'][-1]:.2f}%, Test Acc: {test_acc:.2f}%"
             )
-            
+
             # Save checkpoint
             if (epoch + 1) % save_checkpoint_every == 0 or epoch == epochs - 1:
                 self.checkpoint_manager.save_checkpoint(
@@ -505,14 +509,17 @@ class DiETExperiment:
                     model_state_dict=self.model.state_dict(),
                     optimizer_state_dict=optimizer.state_dict(),
                     scheduler_state_dict=scheduler.state_dict(),
-                    metrics={"train_acc": history["train_acc"][-1], "test_acc": test_acc},
-                    extra_state={"history": history}
+                    metrics={
+                        "train_acc": history["train_acc"][-1],
+                        "test_acc": test_acc,
+                    },
+                    extra_state={"history": history},
                 )
 
         baseline_path = os.path.join(self.output_dir, f"baseline_{self.model_type}.pth")
         torch.save(self.model.state_dict(), baseline_path)
         print(f"Baseline model saved to {baseline_path}")
-        
+
         # Clean up checkpoint after successful completion
         self.checkpoint_manager.delete_checkpoint(checkpoint_name)
 

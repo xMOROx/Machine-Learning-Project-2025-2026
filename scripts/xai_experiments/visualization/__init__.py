@@ -9,7 +9,7 @@ from .comparison_plots import (
 
 __all__ = [
     "ComparisonVisualizer",
-    "plot_metric_comparison", 
+    "plot_metric_comparison",
     "plot_attribution_comparison",
     "create_comparison_report",
 ]

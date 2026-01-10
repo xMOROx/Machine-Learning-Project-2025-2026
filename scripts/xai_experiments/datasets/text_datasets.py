@@ -7,9 +7,7 @@ Supported datasets:
 """
 
 import torch
-from torch.utils.data import Dataset, DataLoader
 from typing import Tuple, Optional, Dict, Any, List
-import numpy as np
 
 
 SUPPORTED_TEXT_DATASETS = ["sst2", "imdb", "ag_news"]
@@ -17,7 +15,7 @@ SUPPORTED_TEXT_DATASETS = ["sst2", "imdb", "ag_news"]
 
 class BaseTextDataset:
     """Base class for text datasets."""
-    
+
     def __init__(
         self,
         data_dir: str = "./data",
@@ -32,34 +30,35 @@ class BaseTextDataset:
         self.num_classes = 2
         self.class_names = []
         self.tokenizer = None
-        
+
         self.train_texts = []
         self.train_labels = []
         self.val_texts = []
         self.val_labels = []
-        
+
     def _init_tokenizer(self):
         """Initialize tokenizer."""
         try:
             from transformers import AutoTokenizer
+
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         except ImportError:
-            raise ImportError("transformers library required. Install with: pip install transformers")
-    
-    def tokenize(
-        self, texts: List[str]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+            raise ImportError(
+                "transformers library required. Install with: pip install transformers"
+            )
+
+    def tokenize(self, texts: List[str]) -> Tuple[torch.Tensor, torch.Tensor]:
         """Tokenize texts.
-        
+
         Args:
             texts: List of text strings
-            
+
         Returns:
             Tuple of (input_ids, attention_mask)
         """
         if self.tokenizer is None:
             self._init_tokenizer()
-            
+
         encoded = self.tokenizer(
             texts,
             padding="max_length",
@@ -67,29 +66,29 @@ class BaseTextDataset:
             max_length=self.max_length,
             return_tensors="pt",
         )
-        
+
         return encoded["input_ids"], encoded["attention_mask"]
-    
+
     def get_train_data(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Get tokenized training data.
-        
+
         Returns:
             Tuple of (input_ids, attention_mask, labels)
         """
         input_ids, attention_mask = self.tokenize(self.train_texts)
         labels = torch.tensor(self.train_labels)
         return input_ids, attention_mask, labels
-    
+
     def get_val_data(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Get tokenized validation data.
-        
+
         Returns:
             Tuple of (input_ids, attention_mask, labels)
         """
         input_ids, attention_mask = self.tokenize(self.val_texts)
         labels = torch.tensor(self.val_labels)
         return input_ids, attention_mask, labels
-    
+
     def get_info(self) -> Dict[str, Any]:
         """Get dataset information."""
         return {
@@ -104,11 +103,11 @@ class BaseTextDataset:
 
 class SST2Dataset(BaseTextDataset):
     """Stanford Sentiment Treebank v2 (SST-2) dataset.
-    
+
     Binary sentiment classification from movie reviews.
     Part of the GLUE benchmark.
     """
-    
+
     def __init__(
         self,
         data_dir: str = "./data",
@@ -120,23 +119,27 @@ class SST2Dataset(BaseTextDataset):
         self.num_classes = 2
         self.class_names = ["negative", "positive"]
         self._load_data()
-    
+
     def _load_data(self):
         """Load SST-2 dataset from Hugging Face."""
         try:
             from datasets import load_dataset
         except ImportError:
-            raise ImportError("datasets library required. Install with: pip install datasets")
-        
+            raise ImportError(
+                "datasets library required. Install with: pip install datasets"
+            )
+
         dataset = load_dataset("glue", "sst2")
-        
+
         train_data = dataset["train"]
         val_data = dataset["validation"]
-        
+
         # Limit samples if specified
         if self.max_samples:
-            train_data = train_data.select(range(min(self.max_samples, len(train_data))))
-        
+            train_data = train_data.select(
+                range(min(self.max_samples, len(train_data)))
+            )
+
         self.train_texts = train_data["sentence"]
         self.train_labels = train_data["label"]
         self.val_texts = val_data["sentence"]
@@ -145,11 +148,11 @@ class SST2Dataset(BaseTextDataset):
 
 class IMDBDataset(BaseTextDataset):
     """IMDB movie reviews dataset.
-    
+
     Binary sentiment classification from movie reviews.
     50,000 reviews (25k train, 25k test).
     """
-    
+
     def __init__(
         self,
         data_dir: str = "./data",
@@ -161,24 +164,30 @@ class IMDBDataset(BaseTextDataset):
         self.num_classes = 2
         self.class_names = ["negative", "positive"]
         self._load_data()
-    
+
     def _load_data(self):
         """Load IMDB dataset from Hugging Face."""
         try:
             from datasets import load_dataset
         except ImportError:
-            raise ImportError("datasets library required. Install with: pip install datasets")
-        
+            raise ImportError(
+                "datasets library required. Install with: pip install datasets"
+            )
+
         dataset = load_dataset("imdb")
-        
+
         train_data = dataset["train"]
         test_data = dataset["test"]
-        
+
         # Limit samples if specified
         if self.max_samples:
-            train_data = train_data.select(range(min(self.max_samples, len(train_data))))
-            test_data = test_data.select(range(min(self.max_samples // 2, len(test_data))))
-        
+            train_data = train_data.select(
+                range(min(self.max_samples, len(train_data)))
+            )
+            test_data = test_data.select(
+                range(min(self.max_samples // 2, len(test_data)))
+            )
+
         self.train_texts = train_data["text"]
         self.train_labels = train_data["label"]
         self.val_texts = test_data["text"]
@@ -187,14 +196,14 @@ class IMDBDataset(BaseTextDataset):
 
 class AGNewsDataset(BaseTextDataset):
     """AG News dataset.
-    
+
     4-class news topic classification:
     - World (0)
     - Sports (1)
     - Business (2)
     - Sci/Tech (3)
     """
-    
+
     def __init__(
         self,
         data_dir: str = "./data",
@@ -206,24 +215,30 @@ class AGNewsDataset(BaseTextDataset):
         self.num_classes = 4
         self.class_names = ["World", "Sports", "Business", "Sci/Tech"]
         self._load_data()
-    
+
     def _load_data(self):
         """Load AG News dataset from Hugging Face."""
         try:
             from datasets import load_dataset
         except ImportError:
-            raise ImportError("datasets library required. Install with: pip install datasets")
-        
+            raise ImportError(
+                "datasets library required. Install with: pip install datasets"
+            )
+
         dataset = load_dataset("ag_news")
-        
+
         train_data = dataset["train"]
         test_data = dataset["test"]
-        
+
         # Limit samples if specified
         if self.max_samples:
-            train_data = train_data.select(range(min(self.max_samples, len(train_data))))
-            test_data = test_data.select(range(min(self.max_samples // 4, len(test_data))))
-        
+            train_data = train_data.select(
+                range(min(self.max_samples, len(train_data)))
+            )
+            test_data = test_data.select(
+                range(min(self.max_samples // 4, len(test_data)))
+            )
+
         self.train_texts = train_data["text"]
         self.train_labels = train_data["label"]
         self.val_texts = test_data["text"]
@@ -238,22 +253,22 @@ def get_text_dataset(
     model_name: str = "bert-base-uncased",
 ) -> BaseTextDataset:
     """Factory function to get text dataset by name.
-    
+
     Args:
         name: Dataset name (sst2, imdb, ag_news)
         data_dir: Directory to store/load data
         max_samples: Maximum number of training samples
         max_length: Maximum sequence length for tokenization
         model_name: Pretrained model name for tokenizer
-        
+
     Returns:
         Dataset wrapper instance
-        
+
     Raises:
         ValueError: If dataset name is not supported
     """
     name = name.lower()
-    
+
     if name == "sst2":
         return SST2Dataset(data_dir, max_samples, max_length, model_name)
     elif name == "imdb":
@@ -263,6 +278,5 @@ def get_text_dataset(
         return AGNewsDataset(data_dir, max_samples, max_length, model_name)
     else:
         raise ValueError(
-            f"Unsupported text dataset: {name}. "
-            f"Supported: {SUPPORTED_TEXT_DATASETS}"
+            f"Unsupported text dataset: {name}. Supported: {SUPPORTED_TEXT_DATASETS}"
         )
