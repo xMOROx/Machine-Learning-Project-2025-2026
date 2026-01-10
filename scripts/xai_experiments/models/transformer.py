@@ -101,3 +101,12 @@ class BertForSequenceClassificationWithIG(nn.Module):
 
         self.model = BertForSequenceClassification.from_pretrained(path).to(self.device)
         self.tokenizer = BertTokenizer.from_pretrained(path)
+
+    def get_state_dict(self):
+        """Get model state dict for checkpointing."""
+        return self.model.state_dict()
+
+    def load_state_dict_from_checkpoint(self, state_dict):
+        """Load model state dict from checkpoint."""
+        self.model.load_state_dict(state_dict)
+        self.model = self.model.to(self.device)

@@ -1,28 +1,26 @@
 #!/bin/bash
+# Configuration for XAI Experiments (DiET vs GradCAM/IG Comparison Framework)
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# Directories
 DATA_DIR="${PROJECT_ROOT}/data"
 OUTPUTS_DIR="${PROJECT_ROOT}/outputs"
-MODELS_DIR="${PROJECT_ROOT}/outputs/models"
+XAI_OUTPUTS_DIR="${OUTPUTS_DIR}/xai_experiments"
+CHECKPOINTS_DIR="${XAI_OUTPUTS_DIR}/checkpoints"
 
-DIET_DIR="${PROJECT_ROOT}/DiET"
-HTP_DIR="${PROJECT_ROOT}/how-to-probe"
-HTP_MMPRETRAIN_DIR="${HTP_DIR}/pretraining/mmpretrain"
-HTP_DINO_DIR="${HTP_DIR}/pretraining/dino"
-
+# Low VRAM mode for laptops
 LOW_VRAM="${LOW_VRAM:-false}"
 
 if [ "${LOW_VRAM}" = "true" ]; then
   DEFAULT_BATCH_SIZE=16
   DEFAULT_EVAL_BATCH_SIZE=8
-  DEFAULT_GPUS=1
 else
   DEFAULT_BATCH_SIZE=64
   DEFAULT_EVAL_BATCH_SIZE=64
-  DEFAULT_GPUS=4
 fi
 
+# Colors for logging
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 CYAN='\033[0;36m'

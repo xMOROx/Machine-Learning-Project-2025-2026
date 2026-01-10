@@ -1,18 +1,25 @@
-"""Experiments module for XAI experiments."""
+"""Experiments module for XAI comparison framework.
 
-from .cifar10_experiment import CIFAR10Experiment
-from .glue_experiment import GLUEExperiment
-from .model_comparison import ModelComparison
-from .diet_experiment import DiETExperiment
-from .diet_text_experiment import DiETTextExperiment
-from .xai_comparison import XAIMethodsComparison, run_diet_comparison
+This module provides the core experiment classes for comparing
+DiET with GradCAM (images) and Integrated Gradients (text).
+
+Datasets used:
+- CIFAR-10: For image classification and DiET vs GradCAM comparison
+- SST-2 (GLUE): For text classification and DiET vs Integrated Gradients comparison
+"""
+
+from .diet_experiment import DiETExperiment, DiETExplainer
+from .diet_text_experiment import DiETTextExperiment, DiETTextExplainer
+from .xai_comparison import XAIMethodsComparison, ComparisonConfig, run_diet_comparison
 
 __all__ = [
-    "CIFAR10Experiment",
-    "GLUEExperiment",
-    "ModelComparison",
-    "DiETExperiment",
-    "DiETTextExperiment",
+    # Main comparison framework
     "XAIMethodsComparison",
+    "ComparisonConfig",
     "run_diet_comparison",
+    # DiET experiments
+    "DiETExperiment",
+    "DiETExplainer",
+    "DiETTextExperiment",
+    "DiETTextExplainer",
 ]

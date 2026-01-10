@@ -1,53 +1,76 @@
 {
   "baseline": {
-    "final_test_acc": 88.51,
-    "loaded_from": "/home/patryk/programming/Machine-Learning-Project-2025-2026/outputs/xai_experiments/diet_comparison/cifar10/baseline_resnet.pth"
+    "final_train_acc": 99.124,
+    "final_test_acc": 90.11,
+    "history": {
+      "train_loss": [
+        0.8565033140734687,
+        0.4726260760018479,
+        0.28034709325335533,
+        0.1113937315894547,
+        0.029639989099179597
+      ],
+      "train_acc": [
+        70.63,
+        83.922,
+        90.472,
+        96.128,
+        99.124
+      ],
+      "test_acc": [
+        73.03,
+        84.5,
+        86.28,
+        88.29,
+        90.11
+      ]
+    }
   },
   "diet": {
     "history": [
       {
         "step": 0,
         "mask_metrics": {
-          "loss": 0.1354889497756958,
-          "t1_faithfulness": 0.06896522607803345,
-          "t2_consistency": 0.06652372417449952,
-          "faithful_acc": 0.9658,
-          "masked_acc": 0.952
+          "loss": 0.058665083640813825,
+          "t1_faithfulness": 0.007951092114299535,
+          "t2_consistency": 0.050713991571217774,
+          "faithful_acc": 0.9768,
+          "masked_acc": 0.9764
         },
-        "model_test_acc": 88.24
+        "model_test_acc": 88.86
       },
       {
         "step": 1,
         "mask_metrics": {
-          "loss": 0.1180682541847229,
-          "t1_faithfulness": 0.07775443382263184,
-          "t2_consistency": 0.04031381972432137,
-          "faithful_acc": 0.9752,
-          "masked_acc": 0.962
+          "loss": 0.4872164900779724,
+          "t1_faithfulness": 0.007240456448402256,
+          "t2_consistency": 0.47997603435516356,
+          "faithful_acc": 0.7604,
+          "masked_acc": 0.76
         },
-        "model_test_acc": 87.64
+        "model_test_acc": 88.01
       }
     ],
-    "final_test_acc": 87.64
+    "final_test_acc": 88.01
   },
   "comparison": {
     "gradcam": {
       "perturbation_scores": {
-        "10": 0.375,
-        "20": 0.375,
-        "50": 0.375
+        "10": 0.38,
+        "20": 0.34,
+        "50": 0.64
       },
-      "mean_score": 0.375
+      "mean_score": 0.4533333333333333
     },
     "diet": {
       "perturbation_scores": {
-        "10": 0.25,
-        "20": 0.375,
-        "50": 0.875
+        "10": 0.36,
+        "20": 0.44,
+        "50": 0.78
       },
-      "mean_score": 0.5
+      "mean_score": 0.5266666666666667
     },
-    "improvement": 0.125
+    "improvement": 0.07333333333333342
   },
-  "total_time_seconds": 521.2428531646729
+  "total_time_seconds": 1274.7020063400269
 }

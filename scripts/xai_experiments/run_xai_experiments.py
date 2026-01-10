@@ -1,4 +1,20 @@
 #!/usr/bin/env python3
+"""XAI Comparison Framework - Main Entry Point.
+
+This script provides the main entry point for running DiET vs GradCAM/IG comparisons.
+It can be used from command line or imported as a module for notebook usage.
+
+Usage:
+    Command line:
+        python run_xai_experiments.py --diet              # Run full comparison
+        python run_xai_experiments.py --diet --diet-images  # Images only
+        python run_xai_experiments.py --diet --diet-text    # Text only
+        python run_xai_experiments.py --diet --low-vram     # Low memory mode
+
+    In notebook:
+        from run_xai_experiments import run_comparison
+        results = run_comparison(run_images=True, run_text=True)
+"""
 
 import os
 import sys
@@ -29,13 +45,9 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if device == "cuda":
-        gpu_name = torch.cuda.get_device_name(0)
         gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-        print(f"Detected GPU: {gpu_name}")
-        print(f"GPU Memory: {gpu_memory:.1f} GB")
 
         if gpu_memory < LOW_VRAM_THRESHOLD_GB or low_vram:
-            print("Using low VRAM configuration")
             return {
                 "device": device,
                 "batch_size": 16,
@@ -47,9 +59,10 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
                 "sample_size": 5000,
                 "ig_steps": 20,
                 "gradcam_samples": 8,
+                "comparison_samples": 50,
+                "text_comparison_samples": 20,
             }
         else:
-            print("Using standard configuration")
             return {
                 "device": device,
                 "batch_size": 64,
@@ -61,9 +74,10 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
                 "sample_size": 10000,
                 "ig_steps": 50,
                 "gradcam_samples": 16,
+                "comparison_samples": 100,
+                "text_comparison_samples": 50,
             }
     else:
-        print("No GPU detected, using CPU")
         return {
             "device": device,
             "batch_size": 16,
@@ -75,142 +89,9 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
             "sample_size": 2000,
             "ig_steps": 10,
             "gradcam_samples": 4,
+            "comparison_samples": 20,
+            "text_comparison_samples": 10,
         }
-
-
-def run_cifar10_experiment(
-    config: Dict[str, Any], args: argparse.Namespace
-) -> Dict[str, Any]:
-    """Run CIFAR-10 GradCAM experiment.
-
-    Args:
-        config: Device configuration
-        args: Command line arguments
-
-    Returns:
-        Experiment results
-    """
-    from experiments.cifar10_experiment import CIFAR10Experiment
-
-    print("\n" + "=" * 60)
-    print("Starting CIFAR-10 GradCAM Experiment")
-    print("=" * 60)
-
-    experiment_config = {
-        "data_dir": args.data_dir,
-        "output_dir": os.path.join(args.output_dir, "cifar10"),
-        "model_type": args.model_type,
-        "batch_size": config["cnn_batch_size"],
-        "num_workers": config["num_workers"],
-        "epochs": config["cnn_epochs"],
-        "learning_rate": 0.001,
-        "device": config["device"],
-    }
-
-    experiment = CIFAR10Experiment(experiment_config)
-
-    if args.skip_training:
-        model_path = os.path.join(
-            experiment_config["output_dir"], f"{args.model_type}_cifar10.pth"
-        )
-        if os.path.exists(model_path):
-            experiment.prepare_data()
-            experiment.load_model(model_path)
-            results = experiment.generate_gradcam(num_samples=config["gradcam_samples"])
-        else:
-            print(f"Model not found at {model_path}. Running full pipeline.")
-            results = experiment.run_full_pipeline()
-    else:
-        results = experiment.run_full_pipeline()
-
-    return results
-
-
-def run_glue_experiment(
-    config: Dict[str, Any], args: argparse.Namespace
-) -> Dict[str, Any]:
-    """Run GLUE SST-2 BERT Integrated Gradients experiment.
-
-    Args:
-        config: Device configuration
-        args: Command line arguments
-
-    Returns:
-        Experiment results
-    """
-    from experiments.glue_experiment import GLUEExperiment
-
-    print("\n" + "=" * 60)
-    print("Starting GLUE SST-2 BERT Integrated Gradients Experiment")
-    print("=" * 60)
-
-    experiment_config = {
-        "data_dir": args.data_dir,
-        "output_dir": os.path.join(args.output_dir, "glue_sst2"),
-        "model_name": "bert-base-uncased",
-        "batch_size": config["glue_batch_size"],
-        "max_length": 128,
-        "epochs": config["glue_epochs"],
-        "learning_rate": 2e-5,
-        "device": config["device"],
-    }
-
-    experiment = GLUEExperiment(experiment_config)
-
-    if args.skip_training:
-        model_path = os.path.join(experiment_config["output_dir"], "bert_sst2")
-        if os.path.exists(model_path):
-            experiment.prepare_data()
-            experiment.load_model(model_path)
-            results = experiment.generate_integrated_gradients(
-                num_samples=10, n_steps=config["ig_steps"]
-            )
-        else:
-            print(f"Model not found at {model_path}. Running full pipeline.")
-            results = experiment.run_full_pipeline()
-    else:
-        results = experiment.run_full_pipeline()
-
-    return results
-
-
-def run_model_comparison(
-    config: Dict[str, Any], args: argparse.Namespace
-) -> Dict[str, Any]:
-    """Run model comparison experiment.
-
-    Args:
-        config: Device configuration
-        args: Command line arguments
-
-    Returns:
-        Comparison results
-    """
-    from experiments.model_comparison import ModelComparison
-
-    print("\n" + "=" * 60)
-    print("Starting Model Comparison Experiment")
-    print("=" * 60)
-
-    comparison_config = {
-        "data_dir": args.data_dir,
-        "output_dir": os.path.join(args.output_dir, "model_comparison"),
-        "batch_size": config["cnn_batch_size"],
-        "sample_size": config["sample_size"],
-        "device": config["device"],
-        "cnn_epochs": min(5, config["cnn_epochs"]),
-        "cnn_learning_rate": 0.001,
-        "rf_n_estimators": 100,
-        "rf_max_depth": 20,
-        "lgb_n_estimators": 100,
-        "svm_kernel": "rbf",
-        "lr_max_iter": 1000,
-    }
-
-    comparison = ModelComparison(comparison_config)
-    results = comparison.run_comparison()
-
-    return results
 
 
 def run_diet_experiment(
@@ -221,31 +102,29 @@ def run_diet_experiment(
     Compares DiET discriminative feature attribution with basic XAI methods
     (GradCAM for images, Integrated Gradients for text).
 
+    This is the main experiment function for the comparison framework.
+
     Args:
         config: Device configuration
         args: Command line arguments
 
     Returns:
-        Comparison results
+        Comparison results with metrics and visualizations
     """
-    from experiments.xai_comparison import XAIMethodsComparison
+    from experiments.xai_comparison import XAIMethodsComparison, ComparisonConfig
 
-    print("\n" + "=" * 60)
-    print("Starting DiET vs Basic XAI Comparison")
-    print("=" * 60)
-
-    comparison_config = {
-        "device": config["device"],
-        "data_dir": args.data_dir,
-        "output_dir": os.path.join(args.output_dir, "diet_comparison"),
-        "batch_size": config["cnn_batch_size"],
-        "max_samples_image": config.get("sample_size", 3000),
-        "max_samples_text": config.get("sample_size", 1000) // 2,
-        "epochs_image": min(3, config.get("cnn_epochs", 3)),
-        "epochs_text": min(2, config.get("glue_epochs", 2)),
-        "comparison_samples": config.get("gradcam_samples", 16),
-        "comparison_samples_text": 10,
-    }
+    comparison_config = ComparisonConfig(
+        device=config["device"],
+        image_batch_size=config["cnn_batch_size"],
+        image_epochs=min(5, config.get("cnn_epochs", 5)),
+        image_max_samples=config.get("sample_size", 5000),
+        image_comparison_samples=config.get("comparison_samples", 100),
+        text_epochs=min(3, config.get("glue_epochs", 2)),
+        text_max_samples=config.get("sample_size", 2000) // 2,
+        text_comparison_samples=config.get("text_comparison_samples", 50),
+        text_top_k=args.top_k,
+        output_dir=os.path.join(args.output_dir, "diet_comparison"),
+    )
 
     comparison = XAIMethodsComparison(comparison_config)
 
@@ -256,50 +135,146 @@ def run_diet_experiment(
         run_images=run_images, run_text=run_text, skip_training=args.skip_training
     )
 
+    if results:
+        try:
+            comparison.visualize_results(save_plots=True, show=False)
+        except Exception as e:
+            print(f"Visualization generation failed: {e}")
+
+    return results
+
+
+def run_comparison(
+    run_images: bool = True,
+    run_text: bool = True,
+    low_vram: bool = False,
+    output_dir: str = "./outputs/xai_experiments",
+    skip_training: bool = False,
+    top_k: int = 5,
+    **kwargs,
+) -> Dict[str, Any]:
+    """Convenience function for notebook usage.
+
+    Run DiET comparison experiments with sensible defaults.
+
+    Args:
+        run_images: Whether to run image experiments (DiET vs GradCAM)
+        run_text: Whether to run text experiments (DiET vs IG)
+        low_vram: Use low memory configuration
+        output_dir: Output directory for results
+        skip_training: Skip training, use saved models
+        top_k: Number of top tokens to show in text attribution (default: 5)
+        **kwargs: Additional configuration overrides
+
+    Returns:
+        Comparison results dictionary
+
+    Example:
+        >>> from run_xai_experiments import run_comparison
+        >>> results = run_comparison(run_images=True, run_text=False, top_k=10)
+        >>> print(results["image_experiments"])
+    """
+    from experiments.xai_comparison import XAIMethodsComparison, ComparisonConfig
+
+    config = get_device_config(low_vram)
+
+    comparison_config = ComparisonConfig(
+        device=config["device"],
+        image_batch_size=config["cnn_batch_size"],
+        image_epochs=config.get("cnn_epochs", 5),
+        image_max_samples=config.get("sample_size", 5000),
+        image_comparison_samples=config.get("comparison_samples", 100),
+        text_epochs=config.get("glue_epochs", 2),
+        text_max_samples=config.get("sample_size", 2000) // 2,
+        text_comparison_samples=config.get("text_comparison_samples", 50),
+        text_top_k=top_k,
+        output_dir=os.path.join(output_dir, "diet_comparison"),
+    )
+
+    for key, value in kwargs.items():
+        if hasattr(comparison_config, key):
+            setattr(comparison_config, key, value)
+
+    comparison = XAIMethodsComparison(comparison_config)
+
+    results = comparison.run_full_comparison(
+        run_images=run_images, run_text=run_text, skip_training=skip_training
+    )
+
+    if results:
+        try:
+            comparison.visualize_results(save_plots=True, show=False)
+        except Exception as e:
+            print(f"Visualization generation failed: {e}")
+
     return results
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="XAI Experiments Orchestration Script",
+        description="DiET vs Basic XAI Methods Comparison Framework",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+This framework compares DiET (Discriminative Feature Attribution) with:
+  - GradCAM for image classification
+  - Integrated Gradients for text classification
+
+Image Datasets (4 total):
+  - CIFAR-10: 60,000 32x32 color images in 10 classes
+  - CIFAR-100: 60,000 32x32 color images in 100 classes
+  - SVHN: Street View House Numbers (10 digit classes)
+  - Fashion-MNIST: 70,000 grayscale images of fashion products (10 classes)
+
+Text Datasets (3 total):
+  - SST-2: Stanford Sentiment Treebank (binary sentiment)
+  - IMDB: Movie reviews (binary sentiment, longer texts)
+  - AG News: News classification (4 classes)
+
 Examples:
-  python run_xai_experiments.py --all                    # Run all experiments
-  python run_xai_experiments.py --cifar10 --epochs 5     # Run CIFAR-10 only
-  python run_xai_experiments.py --glue                   # Run GLUE SST-2 only
-  python run_xai_experiments.py --compare                # Run model comparison
-  python run_xai_experiments.py --diet                   # Run DiET comparison (images + text)
-  python run_xai_experiments.py --diet --diet-images     # DiET for images only
-  python run_xai_experiments.py --diet --diet-text       # DiET for text only
-  python run_xai_experiments.py --all --low-vram         # Low VRAM mode
-  python run_xai_experiments.py --cifar10 --skip-training  # Skip training, use saved model
+  # Run full DiET comparison on all datasets (recommended)
+  python run_xai_experiments.py --diet
+  
+  # Run only image comparison (DiET vs GradCAM)
+  python run_xai_experiments.py --diet --diet-images
+  
+  # Run only text comparison (DiET vs IG)
+  python run_xai_experiments.py --diet --diet-text
+  
+  # Show top 10 important tokens in text attribution
+  python run_xai_experiments.py --diet --diet-text --top-k 10
+  
+  # Low VRAM mode for smaller GPUs
+  python run_xai_experiments.py --diet --low-vram
+  
+  # Skip training, use saved models
+  python run_xai_experiments.py --diet --skip-training
         """,
     )
 
-    parser.add_argument("--all", action="store_true", help="Run all experiments")
+    # Main comparison options
     parser.add_argument(
-        "--cifar10", action="store_true", help="Run CIFAR-10 GradCAM experiment"
-    )
-    parser.add_argument(
-        "--glue", action="store_true", help="Run GLUE SST-2 BERT experiment"
-    )
-    parser.add_argument(
-        "--compare", action="store_true", help="Run model comparison experiment"
-    )
-    parser.add_argument(
-        "--diet", action="store_true", help="Run DiET vs basic XAI comparison"
+        "--diet",
+        action="store_true",
+        help="Run DiET vs basic XAI comparison (main use case)",
     )
     parser.add_argument(
         "--diet-images",
         action="store_true",
-        help="Run DiET comparison for images only (with --diet)",
+        help="Run DiET comparison for images only (DiET vs GradCAM)",
     )
     parser.add_argument(
         "--diet-text",
         action="store_true",
-        help="Run DiET comparison for text only (with --diet)",
+        help="Run DiET comparison for text only (DiET vs IG)",
+    )
+
+    # Text-specific options
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=5,
+        help="Number of top important tokens to show in text attribution (default: 5)",
     )
 
     parser.add_argument(
@@ -346,20 +321,17 @@ def main():
     """Main entry point."""
     args = parse_args()
 
-    if not (args.all or args.cifar10 or args.glue or args.compare or args.diet):
+    # Any of the flags should trigger the comparison
+    should_run = args.diet or args.diet_images or args.diet_text
+
+    if not should_run:
         print("No experiment selected. Use --help for usage information.")
-        print("Quick start: python run_xai_experiments.py --all")
-        print("For DiET comparison: python run_xai_experiments.py --diet")
         return
 
     if args.cpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
     else:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
-
-    print("=" * 60)
-    print("XAI Experiments Orchestration Script")
-    print("=" * 60)
 
     config = get_device_config(args.low_vram)
 
@@ -378,21 +350,10 @@ def main():
     total_start = time.time()
 
     try:
-        if args.all or args.cifar10:
-            all_results["experiments"]["cifar10"] = run_cifar10_experiment(config, args)
-
-        if args.all or args.glue:
-            all_results["experiments"]["glue_sst2"] = run_glue_experiment(config, args)
-
-        if args.all or args.compare:
-            all_results["experiments"]["model_comparison"] = run_model_comparison(
-                config, args
-            )
-
-        if args.all or args.diet:
-            all_results["experiments"]["diet_comparison"] = run_diet_experiment(
-                config, args
-            )
+        # All paths now go through run_diet_experiment
+        all_results["experiments"]["diet_comparison"] = run_diet_experiment(
+            config, args
+        )
 
     except KeyboardInterrupt:
         print("\n\nExperiment interrupted by user.")
@@ -421,44 +382,7 @@ def main():
 
         json.dump(make_serializable(all_results), f, indent=2)
 
-    print("\n" + "=" * 60)
-    print("XAI Experiments Complete!")
-    print("=" * 60)
-    print(f"Total time: {total_time / 60:.1f} minutes")
-    print(f"Results saved to: {args.output_dir}")
-
-    if "cifar10" in all_results["experiments"]:
-        print("\nCIFAR-10 Results:")
-        cifar_results = all_results["experiments"]["cifar10"]
-        if isinstance(cifar_results, dict) and "final_test_accuracy" in cifar_results:
-            print(f"  Test Accuracy: {cifar_results['final_test_accuracy']:.2f}%")
-
-    if "glue_sst2" in all_results["experiments"]:
-        print("\nGLUE SST-2 Results:")
-        glue_results = all_results["experiments"]["glue_sst2"]
-        if isinstance(glue_results, dict) and "final_val_accuracy" in glue_results:
-            print(f"  Validation Accuracy: {glue_results['final_val_accuracy']:.2f}%")
-
-    if "diet_comparison" in all_results["experiments"]:
-        print("\nDiET Comparison Results:")
-        diet_results = all_results["experiments"]["diet_comparison"]
-        if isinstance(diet_results, dict):
-            if (
-                "image_experiments" in diet_results
-                and diet_results["image_experiments"]
-            ):
-                img = diet_results["image_experiments"]
-                print("  Image (CIFAR-10):")
-                print(f"    GradCAM score: {img.get('gradcam_mean_score', 'N/A')}")
-                print(f"    DiET score: {img.get('diet_mean_score', 'N/A')}")
-                if img.get("diet_better"):
-                    print("    ✓ DiET improves attribution quality")
-            if "text_experiments" in diet_results and diet_results["text_experiments"]:
-                txt = diet_results["text_experiments"]
-                print("  Text (SST-2):")
-                print(f"    IG-DiET overlap: {txt.get('ig_diet_overlap', 'N/A')}")
-
-    print("\n" + "=" * 60)
+    print(f"Completed in {total_time / 60:.1f} minutes. Results: {args.output_dir}")
 
 
 if __name__ == "__main__":
