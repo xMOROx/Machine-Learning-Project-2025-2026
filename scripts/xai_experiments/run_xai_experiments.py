@@ -45,13 +45,9 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if device == "cuda":
-        gpu_name = torch.cuda.get_device_name(0)
         gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-        print(f"Detected GPU: {gpu_name}")
-        print(f"GPU Memory: {gpu_memory:.1f} GB")
 
         if gpu_memory < LOW_VRAM_THRESHOLD_GB or low_vram:
-            print("Using low VRAM configuration")
             return {
                 "device": device,
                 "batch_size": 16,
@@ -67,7 +63,6 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
                 "text_comparison_samples": 20,
             }
         else:
-            print("Using standard configuration")
             return {
                 "device": device,
                 "batch_size": 64,
@@ -83,7 +78,6 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
                 "text_comparison_samples": 50,
             }
     else:
-        print("No GPU detected, using CPU")
         return {
             "device": device,
             "batch_size": 16,
@@ -100,79 +94,7 @@ def get_device_config(low_vram: bool = False) -> Dict[str, Any]:
         }
 
 
-def run_cifar10_experiment(
-    config: Dict[str, Any], args: argparse.Namespace
-) -> Dict[str, Any]:
-    """Run CIFAR-10 GradCAM experiment (deprecated - use --diet instead).
 
-    This is now part of the DiET comparison framework.
-    Use --diet --diet-images for DiET vs GradCAM comparison.
-
-    Args:
-        config: Device configuration
-        args: Command line arguments
-
-    Returns:
-        Experiment results
-    """
-    print("\n" + "=" * 60)
-    print("DEPRECATED: Use --diet --diet-images instead")
-    print("Redirecting to DiET vs GradCAM comparison...")
-    print("=" * 60)
-    
-    # Redirect to DiET comparison with images only
-    args.diet_images = True
-    args.diet_text = False
-    return run_diet_experiment(config, args)
-
-
-def run_glue_experiment(
-    config: Dict[str, Any], args: argparse.Namespace
-) -> Dict[str, Any]:
-    """Run GLUE SST-2 BERT experiment (deprecated - use --diet instead).
-
-    This is now part of the DiET comparison framework.
-    Use --diet --diet-text for DiET vs IG comparison.
-
-    Args:
-        config: Device configuration
-        args: Command line arguments
-
-    Returns:
-        Experiment results
-    """
-    print("\n" + "=" * 60)
-    print("DEPRECATED: Use --diet --diet-text instead")
-    print("Redirecting to DiET vs IG comparison...")
-    print("=" * 60)
-    
-    # Redirect to DiET comparison with text only
-    args.diet_images = False
-    args.diet_text = True
-    return run_diet_experiment(config, args)
-
-
-def run_model_comparison(
-    config: Dict[str, Any], args: argparse.Namespace
-) -> Dict[str, Any]:
-    """Run model comparison experiment (removed).
-
-    This experiment has been removed as it is not related to
-    DiET vs GradCAM/IG comparison. Use --diet for XAI comparison.
-
-    Args:
-        config: Device configuration
-        args: Command line arguments
-
-    Returns:
-        Empty results
-    """
-    print("\n" + "=" * 60)
-    print("REMOVED: Model comparison is no longer available")
-    print("Use --diet for DiET vs GradCAM/IG comparison instead")
-    print("=" * 60)
-    
-    return {"error": "Model comparison has been removed. Use --diet instead."}
 
 
 def run_diet_experiment(
@@ -193,15 +115,6 @@ def run_diet_experiment(
         Comparison results with metrics and visualizations
     """
     from experiments.xai_comparison import XAIMethodsComparison, ComparisonConfig
-
-    print("\n" + "=" * 60)
-    print("DiET vs Basic XAI Methods Comparison Framework")
-    print("=" * 60)
-    print("Comparing:")
-    print("  - Images: DiET vs GradCAM (CIFAR-10, CIFAR-100, SVHN, Fashion-MNIST)")
-    print("  - Text: DiET vs Integrated Gradients (SST-2, IMDB, AG News)")
-    print(f"  - Text top-k tokens: {args.top_k}")
-    print("=" * 60)
 
     # Build ComparisonConfig
     comparison_config = ComparisonConfig(
@@ -426,28 +339,13 @@ def main():
     should_run = args.diet or args.diet_images or args.diet_text or args.all or args.cifar10 or args.glue or args.compare
     
     if not should_run:
-        print("=" * 60)
-        print("DiET vs Basic XAI Methods Comparison Framework")
-        print("=" * 60)
-        print("\nDatasets:")
-        print("  - CIFAR-10: For image classification (DiET vs GradCAM)")
-        print("  - SST-2: For text classification (DiET vs Integrated Gradients)")
-        print("\nNo experiment selected. Use --help for usage information.")
-        print("\nQuick start (recommended):")
-        print("  python run_xai_experiments.py --diet")
+        print("No experiment selected. Use --help for usage information.")
         return
 
     if args.cpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
     else:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
-
-    print("=" * 60)
-    print("DiET vs Basic XAI Methods Comparison Framework")
-    print("=" * 60)
-    print("\nDatasets:")
-    print("  - CIFAR-10: For image classification (DiET vs GradCAM)")
-    print("  - SST-2: For text classification (DiET vs Integrated Gradients)")
 
     config = get_device_config(args.low_vram)
 
@@ -498,49 +396,7 @@ def main():
 
         json.dump(make_serializable(all_results), f, indent=2)
 
-    print("\n" + "=" * 60)
-    print("Comparison Complete!")
-    print("=" * 60)
-    print(f"Total time: {total_time / 60:.1f} minutes")
-    print(f"Results saved to: {args.output_dir}")
-
-    # Print diet comparison results (main focus)
-    if "diet_comparison" in all_results["experiments"]:
-        print("\n" + "-" * 40)
-        print("DiET vs Basic XAI Methods - Summary")
-        print("-" * 40)
-        diet_results = all_results["experiments"]["diet_comparison"]
-        if isinstance(diet_results, dict):
-            if (
-                "image_experiments" in diet_results
-                and diet_results["image_experiments"]
-            ):
-                img = diet_results["image_experiments"]
-                print("\n📸 Image Classification (CIFAR-10):")
-                print(f"   Baseline Accuracy: {img.get('baseline_accuracy', 'N/A'):.2f}%")
-                print(f"   GradCAM Score: {img.get('gradcam_mean_score', 'N/A'):.4f}")
-                print(f"   DiET Score: {img.get('diet_mean_score', 'N/A'):.4f}")
-                if img.get("diet_better"):
-                    print(f"   ✓ DiET improves attribution by {img.get('improvement', 0):.4f}")
-                else:
-                    print(f"   → GradCAM sufficient for this task")
-                    
-            if "text_experiments" in diet_results and diet_results["text_experiments"]:
-                txt = diet_results["text_experiments"]
-                print("\n📝 Text Classification (SST-2):")
-                print(f"   Baseline Accuracy: {txt.get('baseline_accuracy', 'N/A'):.2f}%")
-                overlap = txt.get('ig_diet_overlap', 0)
-                print(f"   IG-DiET Token Overlap: {overlap:.4f}")
-                if overlap > 0.5:
-                    print("   → High agreement between methods")
-                else:
-                    print("   → DiET identifies different discriminative features")
-
-    print("\n" + "=" * 60)
-    print("For notebook usage:")
-    print("  from run_xai_experiments import run_comparison")
-    print("  results = run_comparison(run_images=True, run_text=True)")
-    print("=" * 60)
+    print(f"Completed in {total_time / 60:.1f} minutes. Results: {args.output_dir}")
 
 
 if __name__ == "__main__":
