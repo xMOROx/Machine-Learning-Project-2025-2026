@@ -113,6 +113,9 @@ def run_diet_experiment(
     """
     from experiments.xai_comparison import XAIMethodsComparison, ComparisonConfig
 
+    # Determine if low VRAM mode is active
+    is_low_vram = config.get("glue_batch_size", 16) <= 8
+
     comparison_config = ComparisonConfig(
         device=config["device"],
         image_batch_size=config["cnn_batch_size"],
@@ -124,6 +127,7 @@ def run_diet_experiment(
         text_max_samples=config.get("sample_size", 2000) // 2,
         text_comparison_samples=config.get("text_comparison_samples", 50),
         text_top_k=args.top_k,
+        low_vram=is_low_vram,
         output_dir=os.path.join(args.output_dir, "diet_comparison"),
     )
 
@@ -179,6 +183,9 @@ def run_comparison(
 
     config = get_device_config(low_vram)
 
+    # Determine if low VRAM mode is active
+    is_low_vram = low_vram or config.get("glue_batch_size", 16) <= 8
+
     comparison_config = ComparisonConfig(
         device=config["device"],
         image_batch_size=config["cnn_batch_size"],
@@ -190,6 +197,7 @@ def run_comparison(
         text_max_samples=config.get("sample_size", 2000) // 2,
         text_comparison_samples=config.get("text_comparison_samples", 50),
         text_top_k=top_k,
+        low_vram=is_low_vram,
         output_dir=os.path.join(output_dir, "diet_comparison"),
     )
 

@@ -79,6 +79,7 @@ class ComparisonConfig:
     # Output settings
     output_dir: str = "./outputs/xai_experiments/comparison"
     save_visualizations: bool = True
+    low_vram: bool = False  # Enable low VRAM optimizations
 
     # Backward compatibility - single dataset mode
     image_dataset: str = "cifar10"  # Default for single dataset mode
@@ -315,6 +316,7 @@ class XAIMethodsComparison:
             "epochs": self._get_config_value("text_epochs", 2),
             "comparison_samples": self._get_config_value("text_comparison_samples", 10),
             "rounding_steps": self._get_config_value("diet_rounding_steps", 2),
+            "low_vram": self._get_config_value("low_vram", False),
             "dataset": dataset,  # Pass dataset name
         }
 

@@ -249,22 +249,20 @@ class DiETTextExperiment:
             self.dataset_name
         ]
 
+        # Batch size configuration for memory optimization
+        self.batch_size = config.get("batch_size", 16)
+
+        # Determine if low VRAM mode is enabled
+        # Check explicit flag first, then infer from batch size
+        self.low_vram = config.get("low_vram", self.batch_size <= 8)
+
         # Use config max_length or dataset default, with low VRAM adjustment
         config_max_length = config.get("max_length", default_max_length)
         # For IMDB on low VRAM, reduce max_length to save memory
-        if self.dataset_name == "imdb" and config_max_length > 128:
-            # Check if low_vram mode is enabled via smaller batch size hint
-            batch_size = config.get("batch_size", 16)
-            if batch_size <= 8:
-                # Low VRAM mode: reduce IMDB max_length to save memory
-                self.max_length = min(config_max_length, 128)
-            else:
-                self.max_length = config_max_length
+        if self.dataset_name == "imdb" and config_max_length > 128 and self.low_vram:
+            self.max_length = min(config_max_length, 128)
         else:
             self.max_length = config_max_length
-
-        # Batch size configuration for memory optimization
-        self.batch_size = config.get("batch_size", 16)
 
         self.train_input_ids = None
         self.train_attention_mask = None
