@@ -203,13 +203,19 @@ class DiETTextExplainer:
 
 
 class DiETTextExperiment:
-    """DiET experiment for text classification (SST-2) with BERT.
+    """DiET experiment for text classification with BERT.
 
+    Supports multiple datasets: SST-2, IMDB, AG News.
     Compares DiET token attributions with Integrated Gradients.
     Supports resumable training via checkpoint snapshots.
     """
 
-    SST2_LABELS = ["negative", "positive"]
+    # Dataset configurations: {dataset_name: (num_labels, class_names, default_max_length)}
+    DATASET_CONFIGS = {
+        "sst2": (2, ["negative", "positive"], 128),
+        "imdb": (2, ["negative", "positive"], 256),
+        "ag_news": (4, ["World", "Sports", "Business", "Sci/Tech"], 128),
+    }
 
     def __init__(self, config: Dict[str, Any]):
         """Initialize DiET text experiment.
@@ -222,15 +228,43 @@ class DiETTextExperiment:
             "device", "cuda" if torch.cuda.is_available() else "cpu"
         )
 
-        self.data_dir = config.get("data_dir", "./data/glue_sst2")
+        self.data_dir = config.get("data_dir", "./data")
         self.output_dir = config.get(
             "output_dir", "./outputs/xai_experiments/diet_text"
         )
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.model_name = config.get("model_name", "bert-base-uncased")
-        self.max_length = config.get("max_length", 128)
         self.model = None
+
+        # Get dataset name and configuration
+        self.dataset_name = config.get("dataset", "sst2").lower()
+        if self.dataset_name not in self.DATASET_CONFIGS:
+            raise ValueError(
+                f"Unsupported dataset: {self.dataset_name}. "
+                f"Supported: {list(self.DATASET_CONFIGS.keys())}"
+            )
+
+        self.num_labels, self.class_labels, default_max_length = self.DATASET_CONFIGS[
+            self.dataset_name
+        ]
+
+        # Use config max_length or dataset default, with low VRAM adjustment
+        config_max_length = config.get("max_length", default_max_length)
+        # For IMDB on low VRAM, reduce max_length to save memory
+        if self.dataset_name == "imdb" and config_max_length > 128:
+            # Check if low_vram mode is enabled via smaller batch size hint
+            batch_size = config.get("batch_size", 16)
+            if batch_size <= 8:
+                # Low VRAM mode: reduce IMDB max_length to save memory
+                self.max_length = min(config_max_length, 128)
+            else:
+                self.max_length = config_max_length
+        else:
+            self.max_length = config_max_length
+
+        # Batch size configuration for memory optimization
+        self.batch_size = config.get("batch_size", 16)
 
         self.train_input_ids = None
         self.train_attention_mask = None
@@ -243,13 +277,12 @@ class DiETTextExperiment:
         # Initialize checkpoint manager for resumable training
         checkpoint_dir = os.path.join(self.output_dir, "checkpoints")
         self.checkpoint_manager = CheckpointManager(checkpoint_dir=checkpoint_dir)
-        dataset_name = config.get("dataset", "sst2")
         self.experiment_name = config.get(
-            "experiment_name", f"diet_text_{dataset_name}"
+            "experiment_name", f"diet_text_{self.dataset_name}"
         )
 
     def _init_model(self):
-        """Initialize BERT model."""
+        """Initialize BERT model with correct number of labels for the dataset."""
         if self.model is None:
             try:
                 from ..models.transformer import BertForSequenceClassificationWithIG
@@ -262,23 +295,46 @@ class DiETTextExperiment:
                 from models.transformer import BertForSequenceClassificationWithIG
 
             self.model = BertForSequenceClassificationWithIG(
-                model_name=self.model_name, num_labels=2, device=self.device
+                model_name=self.model_name,
+                num_labels=self.num_labels,
+                device=self.device,
             )
 
     def prepare_data(self, max_samples: int = 2000) -> None:
-        """Prepare SST-2 data.
+        """Prepare dataset for training.
+
+        Loads the dataset specified in config (sst2, imdb, or ag_news).
 
         Args:
             max_samples: Maximum training samples
         """
-        print("Loading SST-2 dataset...")
+        print(f"Loading {self.dataset_name.upper()} dataset...")
         from datasets import load_dataset
 
-        dataset = load_dataset("glue", "sst2", cache_dir=self.data_dir)
-        self._init_model()
+        # Load dataset based on configuration
+        if self.dataset_name == "sst2":
+            dataset = load_dataset("glue", "sst2", cache_dir=self.data_dir)
+            train_texts = dataset["train"]["sentence"][:max_samples]
+            train_labels = dataset["train"]["label"][:max_samples]
+            val_texts = dataset["validation"]["sentence"][:200]
+            val_labels = dataset["validation"]["label"][:200]
+        elif self.dataset_name == "imdb":
+            dataset = load_dataset("imdb", cache_dir=self.data_dir)
+            train_texts = dataset["train"]["text"][:max_samples]
+            train_labels = dataset["train"]["label"][:max_samples]
+            # Use subset of test set for validation
+            val_texts = dataset["test"]["text"][:200]
+            val_labels = dataset["test"]["label"][:200]
+        elif self.dataset_name == "ag_news":
+            dataset = load_dataset("ag_news", cache_dir=self.data_dir)
+            train_texts = dataset["train"]["text"][:max_samples]
+            train_labels = dataset["train"]["label"][:max_samples]
+            val_texts = dataset["test"]["text"][:200]
+            val_labels = dataset["test"]["label"][:200]
+        else:
+            raise ValueError(f"Unsupported dataset: {self.dataset_name}")
 
-        train_texts = dataset["train"]["sentence"][:max_samples]
-        train_labels = dataset["train"]["label"][:max_samples]
+        self._init_model()
 
         print("Tokenizing training data...")
         train_input_ids = []
@@ -293,11 +349,12 @@ class DiETTextExperiment:
         self.train_attention_mask = torch.stack(train_attention_masks)
         self.train_labels = torch.tensor(train_labels)
 
-        self.test_texts = dataset["validation"]["sentence"][:200]
-        self.test_labels = dataset["validation"]["label"][:200]
+        self.test_texts = val_texts
+        self.test_labels = val_labels
 
         print(f"Training samples: {len(self.train_labels)}")
         print(f"Test samples: {len(self.test_texts)}")
+        print(f"Max sequence length: {self.max_length}")
 
     def train_baseline(
         self, epochs: int = 2, save_checkpoint_every: int = 1
@@ -323,7 +380,9 @@ class DiETTextExperiment:
         train_dataset = torch.utils.data.TensorDataset(
             self.train_input_ids, self.train_attention_mask, self.train_labels
         )
-        train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+        train_loader = DataLoader(
+            train_dataset, batch_size=self.batch_size, shuffle=True
+        )
 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.AdamW(self.model.get_parameters(), lr=2e-5)
@@ -481,7 +540,9 @@ class DiETTextExperiment:
             self.train_labels,
             train_preds,
         )
-        diet_loader = DataLoader(diet_dataset, batch_size=16, shuffle=True)
+        diet_loader = DataLoader(
+            diet_dataset, batch_size=self.batch_size, shuffle=True
+        )
 
         token_mask = torch.ones((len(train_preds), self.max_length), requires_grad=True)
         mask_optimizer = optim.Adam([token_mask], lr=0.1)
@@ -672,8 +733,8 @@ class DiETTextExperiment:
         """
 
         for i, sample in enumerate(samples):
-            label_name = self.SST2_LABELS[sample["true_label"]]
-            pred_name = self.SST2_LABELS[sample["pred_class"]]
+            label_name = self.class_labels[sample["true_label"]]
+            pred_name = self.class_labels[sample["pred_class"]]
 
             html += f"""
             <div class="sample">

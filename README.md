@@ -192,13 +192,23 @@ The framework generates:
 
 The framework automatically detects GPU memory and adjusts settings:
 
-| GPU Memory | Batch Size | Comparison Samples | Configuration |
-|------------|------------|-------------------|---------------|
-| ≥ 8GB | 64 | 100 | Standard |
-| < 8GB | 32 | 50 | Low VRAM |
-| CPU only | 16 | 20 | Minimal |
+| GPU Memory | Image Batch | Text Batch | Comparison Samples | Configuration |
+|------------|-------------|------------|-------------------|---------------|
+| ≥ 8GB | 64 | 16 | 100 | Standard |
+| < 8GB | 32 | 8 | 50 | Low VRAM |
+| CPU only | 16 | 4 | 20 | Minimal |
 
-Use `--low-vram` flag to force low memory configuration.
+Use `--low-vram` flag to force low memory configuration:
+
+```bash
+# For GPUs with 6GB or less VRAM
+python scripts/xai_experiments/run_xai_experiments.py --diet --low-vram
+```
+
+**Note for low VRAM GPUs (<8GB):**
+- IMDB dataset max_length is automatically reduced from 256 to 128 tokens
+- Text batch size is reduced to 8 for all datasets
+- Gradient accumulation can be used for larger effective batch sizes
 
 ## 6. API Reference
 
@@ -215,6 +225,8 @@ config = ComparisonConfig(
     image_max_samples=5000,           # Training samples
     image_comparison_samples=100,     # Samples for metric computation
     text_model_name="bert-base-uncased",
+    text_batch_size=16,               # Batch size for text (reduce for low VRAM)
+    text_max_length=128,              # Max sequence length (IMDB uses 256 by default)
     text_max_samples=2000,
     text_comparison_samples=50,
     diet_upsample_factor=4,           # DiET mask upsampling

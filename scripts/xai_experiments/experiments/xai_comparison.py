@@ -57,6 +57,7 @@ class ComparisonConfig:
         default_factory=lambda: ["sst2", "imdb", "ag_news"]
     )
     text_model_name: str = "bert-base-uncased"
+    text_batch_size: int = 16  # Batch size for text training
     text_max_length: int = 128
     text_max_samples: int = 2000
     text_epochs: int = 2
@@ -308,6 +309,7 @@ class XAIMethodsComparison:
             "model_name": self._get_config_value(
                 "text_model_name", "bert-base-uncased"
             ),
+            "batch_size": self._get_config_value("text_batch_size", 16),
             "max_length": self._get_config_value("text_max_length", 128),
             "max_samples": self._get_config_value("text_max_samples", 1000),
             "epochs": self._get_config_value("text_epochs", 2),
