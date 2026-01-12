@@ -57,6 +57,7 @@ class ComparisonConfig:
         default_factory=lambda: ["sst2", "imdb", "ag_news"]
     )
     text_model_name: str = "bert-base-uncased"
+    text_batch_size: int = 16  # Batch size for text training
     text_max_length: int = 128
     text_max_samples: int = 2000
     text_epochs: int = 2
@@ -78,6 +79,7 @@ class ComparisonConfig:
     # Output settings
     output_dir: str = "./outputs/xai_experiments/comparison"
     save_visualizations: bool = True
+    low_vram: bool = False  # Enable low VRAM optimizations
 
     # Backward compatibility - single dataset mode
     image_dataset: str = "cifar10"  # Default for single dataset mode
@@ -308,11 +310,13 @@ class XAIMethodsComparison:
             "model_name": self._get_config_value(
                 "text_model_name", "bert-base-uncased"
             ),
+            "batch_size": self._get_config_value("text_batch_size", 16),
             "max_length": self._get_config_value("text_max_length", 128),
             "max_samples": self._get_config_value("text_max_samples", 1000),
             "epochs": self._get_config_value("text_epochs", 2),
             "comparison_samples": self._get_config_value("text_comparison_samples", 10),
             "rounding_steps": self._get_config_value("diet_rounding_steps", 2),
+            "low_vram": self._get_config_value("low_vram", False),
             "dataset": dataset,  # Pass dataset name
         }
 
