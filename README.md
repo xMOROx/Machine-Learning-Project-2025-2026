@@ -57,8 +57,6 @@ For the fastest experience with GPU acceleration, use our pre-built Google Colab
 
 ### Command Line
 
-### Command Line
-
 ```bash
 # Run full DiET comparison on ALL datasets (recommended)
 python scripts/xai_experiments/run_xai_experiments.py --diet
