@@ -36,8 +36,26 @@ Standard post-hoc explanation methods (e.g., GradCAM, Integrated Gradients) are 
 - **Notebook-Friendly API**: Easy to use in Jupyter notebooks
 - **Hardware Optimized**: Automatic GPU detection with low-VRAM support
 - **Multi-Dataset Support**: Compare across 4 image and 3 text datasets
+- **Google Colab Ready**: Pre-built notebooks for GPU-accelerated experiments
 
 ## 2. Quick Start
+
+### Google Colab (Recommended for Fast Training)
+
+For the fastest experience with GPU acceleration, use our pre-built Google Colab notebooks:
+
+| Notebook | Description | Open in Colab |
+|----------|-------------|---------------|
+| **DiET vs GradCAM** | Image classification comparison on CIFAR-10, CIFAR-100, SVHN, Fashion-MNIST | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/xMOROx/Machine-Learning-Project-2025-2026/blob/main/notebooks/DiET_vs_GradCAM_Image_Comparison.ipynb) |
+| **DiET vs Integrated Gradients** | Text classification comparison on SST-2, IMDB, AG News | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/xMOROx/Machine-Learning-Project-2025-2026/blob/main/notebooks/DiET_vs_IntegratedGradients_Text_Comparison.ipynb) |
+
+**Features of Colab notebooks:**
+- 🚀 Automatic GPU detection and configuration
+- 📊 Comprehensive visualizations and statistical analysis
+- 📄 Downloadable results (JSON, CSV, images)
+- 📋 Academic-style reports suitable for presentations
+
+### Command Line
 
 ### Command Line
 
