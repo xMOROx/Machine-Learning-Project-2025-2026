@@ -36,8 +36,21 @@ Standard post-hoc explanation methods (e.g., GradCAM, Integrated Gradients) are 
 - **Notebook-Friendly API**: Easy to use in Jupyter notebooks
 - **Hardware Optimized**: Automatic GPU detection with low-VRAM support
 - **Multi-Dataset Support**: Compare across 4 image and 3 text datasets
+- **Google Colab Ready**: Pre-built notebook for GPU-accelerated experiments
 
 ## 2. Quick Start
+
+### Google Colab (Recommended)
+
+For the fastest experience with GPU acceleration, use our comprehensive Google Colab notebook:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/xMOROx/Machine-Learning-Project-2025-2026/blob/main/notebooks/DiET_Comprehensive_Comparison.ipynb)
+
+This notebook includes:
+- Complete pipeline for both image and text experiments
+- Automatic GPU detection and configuration
+- Visual summary results for every test
+- Statistical analysis and downloadable results
 
 ### Command Line
 
