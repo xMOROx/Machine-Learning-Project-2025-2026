@@ -126,11 +126,11 @@ class DiETExplainer:
             batch_size: Number of samples
 
         Returns:
-            Background tensor for CIFAR-10 (N, 3, 1, 1)
+            Background tensor for masked images (batch_size, C, H, W)
         """
 
-        means = torch.ones((batch_size, 3)) * torch.tensor([0.4914, 0.4822, 0.4465])
-        stds = torch.ones((batch_size, 3)) * torch.tensor([0.2023, 0.1994, 0.2010])
+        means = torch.ones((batch_size, 3)) * torch.tensor([0.5, 0.5, 0.5])
+        stds = torch.ones((batch_size, 3)) * torch.tensor([0.05, 0.05, 0.05])
         background = torch.normal(mean=means, std=stds)
         background = background.unsqueeze(2).unsqueeze(3).clamp(0, 1)
         return background.to(self.device)
@@ -461,6 +461,8 @@ class DiETExperiment:
                 history = checkpoint.get("extra_state", {}).get("history", history)
                 print(f"Resuming from epoch {start_epoch}")
 
+        dropout = nn.Dropout(p=0.5)
+
         for epoch in range(start_epoch, epochs):
             self.model.train()
             train_loss = 0
@@ -472,6 +474,11 @@ class DiETExperiment:
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
 
                 optimizer.zero_grad()
+
+                if self.model.training:
+                    spatial_mask = dropout(torch.ones((inputs.shape[0], 1, 32, 32), device=self.device)).clamp(0, 1)
+                    inputs = inputs * spatial_mask + (1 - spatial_mask) * 0.5
+
                 outputs = self.model(inputs)
                 loss = criterion(outputs, labels)
                 loss.backward()
@@ -633,19 +640,27 @@ class DiETExperiment:
 
             print("Training mask...")
             prev_loss = float("inf")
-            for i in range(50):
-                metrics = diet.train_mask(
-                    mask, diet_loader, mask_optimizer, sparsity_weights[step]
+            prev_prev_loss = float("inf")
+            max_mask_iters = 50
+
+            for i in range(max_mask_iters):
+                metrics = diet.train_mask(mask, diet_loader, mask_optimizer, sparsity_weights[step])
+                
+                # Check convergence (within 0.5% tolerance)
+                mask_converged = (
+                    metrics["loss"] >= 0.995 * prev_prev_loss and 
+                    metrics["loss"] <= 1.005 * prev_prev_loss
                 )
-
-                if abs(metrics["loss"] - prev_loss) < 0.001:
+                
+                if i % 5 == 0:
+                    print(f"  Iter {i}: Loss={metrics['loss']:.4f}, Sparsity={metrics['sparsity']:.4f}")
+                
+                if mask_converged and i > 10:  
+                    print(f"  Mask converged at iteration {i}")
                     break
+                
+                prev_prev_loss = prev_loss
                 prev_loss = metrics["loss"]
-
-                if i % 10 == 0:
-                    print(
-                        f"  Iter {i}: loss={metrics['loss']:.4f}, faithful_acc={metrics['faithful_acc']:.4f}"
-                    )
 
             with torch.no_grad():
                 mask.copy_(torch.round(mask + rounding_scheme[step]).clamp(0, 1))
@@ -713,14 +728,7 @@ class DiETExperiment:
         return heatmaps, indices
 
     def compare_methods(self, num_samples: int = 16) -> Dict[str, Any]:
-        """Compare DiET with GradCAM.
-
-        Args:
-            num_samples: Number of samples for comparison
-
-        Returns:
-            Comparison results
-        """
+        """Compare DiET with GradCAM."""
         print("\n" + "=" * 50)
         print("Comparing DiET vs GradCAM")
         print("=" * 50)
@@ -739,8 +747,58 @@ class DiETExperiment:
             )
             diet_maps.append(diet_map)
 
+        # Basic pixel perturbation
         gradcam_scores = self._pixel_perturbation_test(gradcam_maps, indices)
         diet_scores = self._pixel_perturbation_test(diet_maps, indices)
+
+        try:
+            from ..metrics.attribution_metrics import (
+                AOPC, FaithfulnessCorrelation, InsertionDeletion
+            )
+            
+            test_images_subset = torch.stack([self.test_images[i] for i in indices])
+            test_labels_subset = torch.tensor([self.test_labels[i] for i in indices])
+            
+            # AOPC
+            aopc_metric = AOPC(self.model, self.device, num_steps=10, patch_size=4)
+            gradcam_aopc_result = aopc_metric.compute(
+                test_images_subset, test_labels_subset, gradcam_maps
+            )
+            diet_aopc_result = aopc_metric.compute(
+                test_images_subset, test_labels_subset, diet_maps
+            )
+            
+            # Faithfulness Correlation
+            faith_metric = FaithfulnessCorrelation(self.model, self.device, num_samples=30)
+            gradcam_faith_result = faith_metric.compute(
+                test_images_subset, test_labels_subset, gradcam_maps
+            )
+            diet_faith_result = faith_metric.compute(
+                test_images_subset, test_labels_subset, diet_maps
+            )
+            
+            # Insertion/Deletion
+            ins_del_metric = InsertionDeletion(self.model, self.device, num_steps=50)
+            gradcam_ins_del_result = ins_del_metric.compute(
+                test_images_subset, test_labels_subset, gradcam_maps
+            )
+            diet_ins_del_result = ins_del_metric.compute(
+                test_images_subset, test_labels_subset, diet_maps
+            )
+            
+            additional_metrics = {
+                "gradcam_aopc": gradcam_aopc_result.value,
+                "diet_aopc": diet_aopc_result.value,
+                "gradcam_faithfulness": gradcam_faith_result.value,
+                "diet_faithfulness": diet_faith_result.value,
+                "gradcam_insertion_auc": gradcam_ins_del_result.details["insertion_auc"],
+                "diet_insertion_auc": diet_ins_del_result.details["insertion_auc"],
+                "gradcam_deletion_auc": gradcam_ins_del_result.details["deletion_auc"],
+                "diet_deletion_auc": diet_ins_del_result.details["deletion_auc"],
+            }
+        except Exception as e:
+            print(f"Warning: Could not compute advanced metrics: {e}")
+            additional_metrics = {}
 
         comparison = {
             "gradcam": {
@@ -753,6 +811,7 @@ class DiETExperiment:
             },
             "improvement": np.mean(list(diet_scores.values()))
             - np.mean(list(gradcam_scores.values())),
+            **additional_metrics,  # Add the new metrics here
         }
 
         self._save_comparison_visualizations(indices, gradcam_maps, diet_maps)
@@ -763,6 +822,11 @@ class DiETExperiment:
         print(f"  GradCAM mean score: {comparison['gradcam']['mean_score']:.4f}")
         print(f"  DiET mean score: {comparison['diet']['mean_score']:.4f}")
         print(f"  Improvement: {comparison['improvement']:.4f}")
+        
+        if additional_metrics:
+            print(f"\nAdvanced Metrics:")
+            print(f"  AOPC - GradCAM: {additional_metrics.get('gradcam_aopc', 'N/A'):.4f}")
+            print(f"  AOPC - DiET: {additional_metrics.get('diet_aopc', 'N/A'):.4f}")
 
         return comparison
 

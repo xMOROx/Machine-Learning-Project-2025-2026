@@ -139,7 +139,14 @@ class DiETTextExplainer:
             embeddings = self.model.get_embeddings(input_ids)
 
             batch_mask = token_mask[idx].unsqueeze(-1).to(self.device)
-            masked_embeddings = embeddings * batch_mask
+
+            # Get baseline embeddings (e.g., [PAD] token embedding)
+            pad_token_id = self.model.tokenizer.pad_token_id
+            baseline_embedding = self.model.get_embeddings(
+            torch.full_like(input_ids, pad_token_id)
+)
+
+            masked_embeddings = embeddings * batch_mask + baseline_embedding * (1 - batch_mask)
 
             pred_masked = F.softmax(
                 self.model.forward_with_embeddings(masked_embeddings, attn_mask), dim=1
