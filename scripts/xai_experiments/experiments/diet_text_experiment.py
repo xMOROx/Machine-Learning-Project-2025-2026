@@ -150,11 +150,14 @@ class DiETTextExplainer:
             t1 = torch.norm(pred_original - pred_full, p=1, dim=1).sum()
             t2 = torch.norm(pred_full - pred_masked, p=1, dim=1).sum()
 
-            sparsity = (token_mask[idx].to(self.device) * attn_mask.float()).sum(1)
-            sparsity = sparsity / attn_mask.float().sum(1)
-            sparsity = sparsity.sum()
+            active_tokens_mask = attn_mask.float()
+            masked_token_mask = token_mask[idx].to(self.device) * active_tokens_mask
 
-            loss = (sparsity_weight * sparsity + t1 + t2) / len(idx)
+            # Sparsity = (Sum of mask values) / (Number of non-padding tokens)
+            sparsity = masked_token_mask.sum(1) / active_tokens_mask.sum(1).clamp(min=1)
+            sparsity_loss = sparsity.mean()
+
+            loss = (sparsity_weight * sparsity_loss + t1 + t2) / len(idx)
 
             mask_optimizer.zero_grad()
             loss.backward()
@@ -613,85 +616,64 @@ class DiETTextExperiment:
             )
             from explainers.integrated_gradients import IntegratedGradientsText
 
-        num_samples = min(num_samples, len(self.test_texts))
+        num_samples = min(num_samples, len(self.train_input_ids), len(self.diet_token_mask))
         ig = IntegratedGradientsText(self.model, self.device)
         diet = DiETTextExplainer(self.model, self.device, self.max_length)
 
         comparison_results = []
+        with torch.no_grad():
+            for i in tqdm(range(num_samples), desc="Comparing methods"):
+                input_ids = self.train_input_ids[i].unsqueeze(0).to(self.device)
+                tokens = self.model.decode_tokens(input_ids[0])
+                text = " ".join(tokens) 
+                label = self.train_labels[i].item()
 
-        for i in tqdm(range(num_samples), desc="Comparing methods"):
-            text = self.test_texts[i]
-            label = self.test_labels[i]
+                try:
+                    ig_attrs, _, pred_class, confidence = ig.compute_attributions(text, n_steps=20)
 
-            try:
-                ig_attrs, tokens, pred_class, confidence = ig.compute_attributions(
-                    text, n_steps=20
-                )
+                    mask_values = self.diet_token_mask[i].cpu().numpy()
+                    diet_attrs = mask_values[:len(tokens)]
+                    diet_tokens = tokens
 
-                sample_idx = i % len(self.diet_token_mask)
-                diet_attrs, diet_tokens = diet.get_token_attributions(
-                    text, self.diet_token_mask, sample_idx
-                )
+                    special_tokens = {"[PAD]", "[CLS]", "[SEP]", "[UNK]", "<pad>", "<s>", "</s>"}
+                
+                    valid_indices = [j for j, t in enumerate(tokens) if t not in special_tokens]
+                    if not valid_indices: continue
 
-                special_tokens = {
-                    "[PAD]",
-                    "[CLS]",
-                    "[SEP]",
-                    "[UNK]",
-                    "<pad>",
-                    "<s>",
-                    "</s>",
-                }
+                    # Adjust k based on sentence length
+                    k = max(1, min(5, len(valid_indices)))
 
-                valid_ig_indices = [
-                    j for j, t in enumerate(tokens) if t not in special_tokens
-                ]
+                    # Sort IG
+                    ig_valid = sorted([(j, np.abs(ig_attrs[j])) for j in valid_indices if j < len(ig_attrs)], 
+                                    key=lambda x: x[1], reverse=True)
+                    ig_top_k = set([x[0] for x in ig_valid[:k]])
 
-                valid_diet_indices = [
-                    j
-                    for j, t in enumerate(diet_tokens)
-                    if t not in special_tokens and j < len(diet_attrs)
-                ]
+                    # Sort DiET
+                    diet_valid = sorted([(j, diet_attrs[j]) for j in valid_indices if j < len(diet_attrs)], 
+                                    key=lambda x: x[1], reverse=True)
+                    diet_top_k = set([x[0] for x in diet_valid[:k]])
 
-                if not valid_ig_indices or not valid_diet_indices:
-                    print(f"  Sample {i}: No valid tokens, skipping")
+                    overlap = len(ig_top_k & diet_top_k) / k
+
+                    comparison_results.append(
+                        {
+                            "text": text[:50] + "...",
+                            "true_label": label,
+                            "pred_class": pred_class,
+                            "confidence": confidence,
+                            "top_k_overlap": overlap,
+                            "ig_top_tokens": [
+                                tokens[j] for j in ig_top_k if j < len(tokens)
+                            ],
+                            "diet_top_tokens": [
+                                diet_tokens[j] for j in diet_top_k if j < len(diet_tokens)
+                            ],
+                        }
+                    )
+
+                except Exception as e:
+                    print(f"Error on sample {i}: {e}")
                     continue
-
-                k = max(1, min(5, len(valid_ig_indices) // 2))
-
-                ig_attrs_valid = [
-                    (j, np.abs(ig_attrs[j]))
-                    for j in valid_ig_indices
-                    if j < len(ig_attrs)
-                ]
-                ig_attrs_valid.sort(key=lambda x: x[1], reverse=True)
-                ig_top_k = set([x[0] for x in ig_attrs_valid[:k]])
-
-                diet_attrs_valid = [(j, diet_attrs[j]) for j in valid_diet_indices]
-                diet_attrs_valid.sort(key=lambda x: x[1], reverse=True)
-                diet_top_k = set([x[0] for x in diet_attrs_valid[:k]])
-
-                overlap = len(ig_top_k & diet_top_k) / k
-
-                comparison_results.append(
-                    {
-                        "text": text[:50] + "...",
-                        "true_label": label,
-                        "pred_class": pred_class,
-                        "confidence": confidence,
-                        "top_k_overlap": overlap,
-                        "ig_top_tokens": [
-                            tokens[j] for j in ig_top_k if j < len(tokens)
-                        ],
-                        "diet_top_tokens": [
-                            diet_tokens[j] for j in diet_top_k if j < len(diet_tokens)
-                        ],
-                    }
-                )
-
-            except Exception as e:
-                print(f"Error on sample {i}: {e}")
-                continue
 
         mean_overlap = np.mean([r["top_k_overlap"] for r in comparison_results])
 
