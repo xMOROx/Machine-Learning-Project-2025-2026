@@ -240,7 +240,6 @@ class DiETTextExperiment:
         self.model_name = config.get("model_name", "bert-base-uncased")
         self.model = None
 
-        # Get dataset name and configuration
         self.dataset_name = config.get("dataset", "sst2").lower()
         if self.dataset_name not in self.DATASET_CONFIGS:
             raise ValueError(
@@ -252,16 +251,11 @@ class DiETTextExperiment:
             self.dataset_name
         ]
 
-        # Batch size configuration for memory optimization
         self.batch_size = config.get("batch_size", 16)
 
-        # Determine if low VRAM mode is enabled
-        # Check explicit flag first, then infer from batch size
         self.low_vram = config.get("low_vram", self.batch_size <= 8)
 
-        # Use config max_length or dataset default, with low VRAM adjustment
         config_max_length = config.get("max_length", default_max_length)
-        # For IMDB on low VRAM, reduce max_length to save memory
         if self.dataset_name == "imdb" and config_max_length > 128 and self.low_vram:
             self.max_length = min(config_max_length, 128)
         else:
@@ -275,7 +269,6 @@ class DiETTextExperiment:
 
         self.results = {}
 
-        # Initialize checkpoint manager for resumable training
         checkpoint_dir = os.path.join(self.output_dir, "checkpoints")
         self.checkpoint_manager = CheckpointManager(checkpoint_dir=checkpoint_dir)
         self.experiment_name = config.get(
@@ -312,7 +305,6 @@ class DiETTextExperiment:
         print(f"Loading {self.dataset_name.upper()} dataset...")
         from datasets import load_dataset
 
-        # Load dataset based on configuration
         if self.dataset_name == "sst2":
             dataset = load_dataset("glue", "sst2", cache_dir=self.data_dir)
             train_texts = dataset["train"]["sentence"][:max_samples]
@@ -323,7 +315,6 @@ class DiETTextExperiment:
             dataset = load_dataset("imdb", cache_dir=self.data_dir)
             train_texts = dataset["train"]["text"][:max_samples]
             train_labels = dataset["train"]["label"][:max_samples]
-            # Use subset of test set for validation
             val_texts = dataset["test"]["text"][:200]
             val_labels = dataset["test"]["label"][:200]
         elif self.dataset_name == "ag_news":
@@ -390,7 +381,6 @@ class DiETTextExperiment:
 
         history = {"train_loss": [], "train_acc": []}
 
-        # Check for existing checkpoint
         if self.checkpoint_manager.has_checkpoint(checkpoint_name):
             print("Found checkpoint, resuming training...")
             checkpoint = self.checkpoint_manager.load_checkpoint(
@@ -452,7 +442,6 @@ class DiETTextExperiment:
         baseline_path = os.path.join(self.output_dir, "bert_baseline")
         self.model.save_model(baseline_path)
 
-        # Clean up checkpoint after successful completion
         self.checkpoint_manager.delete_checkpoint(checkpoint_name)
 
         val_acc = self._evaluate_model()
@@ -593,11 +582,12 @@ class DiETTextExperiment:
 
         return self.results["diet"]
 
-    def compare_with_ig(self, num_samples: int = 10) -> Dict[str, Any]:
+    def compare_with_ig(self, num_samples: int = 10, top_k_values: List[int] = None) -> Dict[str, Any]:
         """Compare DiET with Integrated Gradients.
 
         Args:
             num_samples: Number of samples for comparison
+            top_k_values: List of k values for top-k overlap computation
 
         Returns:
             Comparison results
@@ -606,8 +596,12 @@ class DiETTextExperiment:
         print("Comparing DiET vs Integrated Gradients")
         print("=" * 50)
 
+        if top_k_values is None:
+            top_k_values = [3, 5, 10, 15, 20]
+
         try:
             from ..explainers.integrated_gradients import IntegratedGradientsText
+            from ..metrics.attribution_metrics import TopKTokenOverlap
         except ImportError:
             import sys
 
@@ -615,15 +609,20 @@ class DiETTextExperiment:
                 0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             )
             from explainers.integrated_gradients import IntegratedGradientsText
+            from metrics.attribution_metrics import TopKTokenOverlap
 
         num_samples = min(num_samples, len(self.train_input_ids), len(self.diet_token_mask))
         ig = IntegratedGradientsText(self.model, self.device)
         diet = DiETTextExplainer(self.model, self.device, self.max_length)
 
         comparison_results = []
+        all_ig_attrs = []
+        all_diet_attrs = []
+        all_attention_masks = []
         
         for i in tqdm(range(num_samples), desc="Comparing methods"):
             input_ids = self.train_input_ids[i].unsqueeze(0).to(self.device)
+            attention_mask = self.train_attention_mask[i].unsqueeze(0)
             tokens = self.model.decode_tokens(input_ids[0])
             text = " ".join(tokens) 
             label = self.train_labels[i].item()
@@ -631,44 +630,60 @@ class DiETTextExperiment:
             try:
                 ig_attrs, _, pred_class, confidence = ig.compute_attributions(text, n_steps=20)
 
-
                 mask_values = self.diet_token_mask[i].cpu().numpy()
                 diet_attrs = mask_values[:len(tokens)]
                 diet_tokens = tokens
 
+                all_ig_attrs.append(np.abs(ig_attrs[:len(tokens)]))
+                all_diet_attrs.append(diet_attrs[:len(tokens)])
+                all_attention_masks.append(attention_mask.squeeze().numpy()[:len(tokens)])
+
                 special_tokens = {"[PAD]", "[CLS]", "[SEP]", "[UNK]", "<pad>", "<s>", "</s>"}
             
                 valid_indices = [j for j, t in enumerate(tokens) if t not in special_tokens]
-                if not valid_indices: continue
+                if not valid_indices: 
+                    continue
 
-                # Adjust k based on sentence length
-                k = max(1, min(5, len(valid_indices)))
+                overlaps = {}
+                for k in top_k_values:
+                    actual_k = max(1, min(k, len(valid_indices)))
+                    
+                    ig_valid = sorted([(j, np.abs(ig_attrs[j])) for j in valid_indices if j < len(ig_attrs)], 
+                                    key=lambda x: x[1], reverse=True)
+                    ig_top_k = set([x[0] for x in ig_valid[:actual_k]])
 
-                # Sort IG
+                    diet_valid = sorted([(j, diet_attrs[j]) for j in valid_indices if j < len(diet_attrs)], 
+                                    key=lambda x: x[1], reverse=True)
+                    diet_top_k = set([x[0] for x in diet_valid[:actual_k]])
+
+                    overlaps[f"top_{k}_overlap"] = len(ig_top_k & diet_top_k) / actual_k
+
+                max_k = max(top_k_values)
+                actual_max_k = min(max_k, len(valid_indices))
+                
                 ig_valid = sorted([(j, np.abs(ig_attrs[j])) for j in valid_indices if j < len(ig_attrs)], 
                                 key=lambda x: x[1], reverse=True)
-                ig_top_k = set([x[0] for x in ig_valid[:k]])
-
-                # Sort DiET
+                ig_top_indices = [x[0] for x in ig_valid[:actual_max_k]]
+                
                 diet_valid = sorted([(j, diet_attrs[j]) for j in valid_indices if j < len(diet_attrs)], 
                                 key=lambda x: x[1], reverse=True)
-                diet_top_k = set([x[0] for x in diet_valid[:k]])
-
-                overlap = len(ig_top_k & diet_top_k) / k
+                diet_top_indices = [x[0] for x in diet_valid[:actual_max_k]]
 
                 comparison_results.append(
                     {
-                        "text": text[:50] + "...",
+                        "text": text[:100] + "..." if len(text) > 100 else text,
+                        "full_text": text,
                         "true_label": label,
                         "pred_class": pred_class,
                         "confidence": confidence,
-                        "top_k_overlap": overlap,
-                        "ig_top_tokens": [
-                            tokens[j] for j in ig_top_k if j < len(tokens)
-                        ],
-                        "diet_top_tokens": [
-                            diet_tokens[j] for j in diet_top_k if j < len(diet_tokens)
-                        ],
+                        **overlaps,
+                        "ig_top_tokens": [tokens[j] for j in ig_top_indices if j < len(tokens)],
+                        "diet_top_tokens": [diet_tokens[j] for j in diet_top_indices if j < len(diet_tokens)],
+                        "ig_token_scores": [(tokens[j], float(ig_attrs[j])) for j in ig_top_indices if j < len(tokens)],
+                        "diet_token_scores": [(diet_tokens[j], float(diet_attrs[j])) for j in diet_top_indices if j < len(diet_tokens)],
+                        "all_tokens": tokens,
+                        "ig_attrs": ig_attrs.tolist() if isinstance(ig_attrs, np.ndarray) else ig_attrs,
+                        "diet_attrs": diet_attrs.tolist() if isinstance(diet_attrs, np.ndarray) else diet_attrs,
                     }
                 )
 
@@ -676,74 +691,231 @@ class DiETTextExperiment:
                 print(f"Error on sample {i}: {e}")
                 continue
 
-        mean_overlap = np.mean([r["top_k_overlap"] for r in comparison_results])
+        mean_overlaps = {}
+        std_overlaps = {}
+        for k in top_k_values:
+            key = f"top_{k}_overlap"
+            values = [r[key] for r in comparison_results if key in r]
+            if values:
+                mean_overlaps[key] = np.mean(values)
+                std_overlaps[f"{key}_std"] = np.std(values)
+
+        correlations = []
+        for ig_attr, diet_attr in zip(all_ig_attrs, all_diet_attrs):
+            min_len = min(len(ig_attr), len(diet_attr))
+            if min_len > 2:
+                corr = np.corrcoef(ig_attr[:min_len], diet_attr[:min_len])[0, 1]
+                if not np.isnan(corr):
+                    correlations.append(corr)
 
         comparison = {
             "samples": comparison_results,
-            "mean_top_k_overlap": mean_overlap,
+            "mean_top_k_overlap": mean_overlaps.get("top_5_overlap", 0),
+            **mean_overlaps,
+            **std_overlaps,
+            "mean_correlation": np.mean(correlations) if correlations else 0,
+            "std_correlation": np.std(correlations) if correlations else 0,
             "num_samples": len(comparison_results),
+            "top_k_values": top_k_values,
         }
 
         self.results["comparison"] = comparison
 
         print("\nComparison Results:")
-        print(f"  Mean top-k token overlap: {mean_overlap:.4f}")
-        print("  (1.0 = perfect agreement, 0.0 = no overlap)")
+        for k in top_k_values:
+            key = f"top_{k}_overlap"
+            if key in mean_overlaps:
+                print(f"  Top-{k} token overlap: {mean_overlaps[key]:.4f} (±{std_overlaps.get(f'{key}_std', 0):.4f})")
+        print(f"  Mean attribution correlation: {comparison['mean_correlation']:.4f}")
+        print("  (1.0 = perfect agreement, 0.0 = no correlation)")
 
-        self._save_text_comparison(comparison_results[:5])
+        self._save_text_comparison(comparison_results[:10], top_k_values)
 
         return comparison
 
-    def _save_text_comparison(self, samples: List[Dict]) -> None:
-        """Save text comparison visualizations."""
+    def _save_text_comparison(self, samples: List[Dict], top_k_values: List[int] = None) -> None:
+        """Save text comparison visualizations with enhanced HTML output."""
+        if top_k_values is None:
+            top_k_values = [3, 5, 10, 15, 20]
+            
         viz_dir = os.path.join(self.output_dir, "comparison_visualizations")
         os.makedirs(viz_dir, exist_ok=True)
+
+        max_display_tokens = max(top_k_values) if top_k_values else 20
 
         html = """
         <html>
         <head>
             <style>
-                body { font-family: Arial, sans-serif; padding: 20px; }
-                .sample { margin-bottom: 30px; border-bottom: 1px solid 
-                .method { margin: 10px 0; }
-                .label { font-weight: bold; }
-                .tokens { display: flex; flex-wrap: wrap; gap: 5px; }
-                .token { background: 
-                .top-token { background: 
+                body { 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    padding: 20px; 
+                    background-color: #f5f5f5;
+                    max-width: 1400px;
+                    margin: 0 auto;
+                }
+                h1 { 
+                    color: #2196F3; 
+                    border-bottom: 3px solid #2196F3;
+                    padding-bottom: 10px;
+                }
+                h2 { color: #4CAF50; }
+                .sample { 
+                    margin-bottom: 30px; 
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    padding: 20px;
+                    background: white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .method { 
+                    margin: 15px 0; 
+                    padding: 15px;
+                    background: #f9f9f9;
+                    border-radius: 5px;
+                }
+                .method-title {
+                    font-weight: bold;
+                    color: #333;
+                    margin-bottom: 10px;
+                    font-size: 14px;
+                }
+                .label { font-weight: bold; color: #555; }
+                .tokens { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+                .token { 
+                    padding: 4px 8px; 
+                    border-radius: 4px; 
+                    font-size: 13px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                .token-score {
+                    font-size: 10px;
+                    color: #666;
+                    background: rgba(255,255,255,0.7);
+                    padding: 1px 4px;
+                    border-radius: 3px;
+                }
+                .ig-token { background: linear-gradient(135deg, #81C784 0%, #4CAF50 100%); color: white; }
+                .diet-token { background: linear-gradient(135deg, #64B5F6 0%, #2196F3 100%); color: white; }
+                .overlap-token { background: linear-gradient(135deg, #FFB74D 0%, #FF9800 100%); color: white; }
+                .metrics-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                    gap: 10px;
+                    margin: 15px 0;
+                }
+                .metric-card {
+                    background: #e3f2fd;
+                    padding: 10px;
+                    border-radius: 5px;
+                    text-align: center;
+                }
+                .metric-value { font-size: 20px; font-weight: bold; color: #1976D2; }
+                .metric-label { font-size: 12px; color: #666; }
+                .text-preview {
+                    background: #fff3e0;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin: 10px 0;
+                    font-style: italic;
+                }
+                .legend {
+                    display: flex;
+                    gap: 20px;
+                    margin: 20px 0;
+                    padding: 10px;
+                    background: #f0f0f0;
+                    border-radius: 5px;
+                }
+                .legend-item { display: flex; align-items: center; gap: 5px; }
+                .legend-color { width: 20px; height: 20px; border-radius: 3px; }
             </style>
         </head>
         <body>
-            <h1>DiET vs Integrated Gradients Comparison</h1>
+            <h1>🔬 DiET vs Integrated Gradients Comparison</h1>
+            
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color ig-token"></div>
+                    <span>IG Top Tokens</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color diet-token"></div>
+                    <span>DiET Top Tokens</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color overlap-token"></div>
+                    <span>Overlapping Tokens</span>
+                </div>
+            </div>
         """
 
         for i, sample in enumerate(samples):
             label_name = self.class_labels[sample["true_label"]]
             pred_name = self.class_labels[sample["pred_class"]]
+            
+            ig_tokens_set = set(sample.get("ig_top_tokens", [])[:max_display_tokens])
+            diet_tokens_set = set(sample.get("diet_top_tokens", [])[:max_display_tokens])
+            overlap_tokens = ig_tokens_set & diet_tokens_set
 
             html += f"""
             <div class="sample">
-                <h3>Sample {i + 1}</h3>
-                <p><span class="label">Text:</span> {sample["text"]}</p>
-                <p><span class="label">True Label:</span> {label_name}</p>
-                <p><span class="label">Predicted:</span> {pred_name} (conf: {sample["confidence"]:.2%})</p>
-                <p><span class="label">Top-k Overlap:</span> {sample["top_k_overlap"]:.2%}</p>
+                <h3>📝 Sample {i + 1}</h3>
+                <div class="text-preview">
+                    "{sample.get('text', sample.get('full_text', '')[:100])}"
+                </div>
                 
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">{label_name}</div>
+                        <div class="metric-label">True Label</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{pred_name}</div>
+                        <div class="metric-label">Predicted</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">{sample['confidence']:.1%}</div>
+                        <div class="metric-label">Confidence</div>
+                    </div>
+            """
+            
+            # Add overlap metrics
+            for k in top_k_values[:4]:  # Show first 4 k values
+                key = f"top_{k}_overlap"
+                if key in sample:
+                    html += f"""
+                    <div class="metric-card">
+                        <div class="metric-value">{sample[key]:.1%}</div>
+                        <div class="metric-label">Top-{k} Overlap</div>
+                    </div>
+                    """
+            
+            html += "</div>"
+            
+            html += """
                 <div class="method">
-                    <p><span class="label">IG Top Tokens:</span></p>
+                    <div class="method-title">🟢 Integrated Gradients Top Tokens</div>
                     <div class="tokens">
             """
-            for token in sample["ig_top_tokens"]:
-                html += f'<span class="token top-token">{token}</span>'
+            for token, score in sample.get("ig_token_scores", [])[:max_display_tokens]:
+                token_class = "overlap-token" if token in overlap_tokens else "ig-token"
+                html += f'<span class="token {token_class}">{token}<span class="token-score">{score:.3f}</span></span>'
             html += """
                     </div>
                 </div>
-                
+            """
+            
+            html += """
                 <div class="method">
-                    <p><span class="label">DiET Top Tokens:</span></p>
+                    <div class="method-title">🔵 DiET Top Tokens</div>
                     <div class="tokens">
             """
-            for token in sample["diet_top_tokens"]:
-                html += f'<span class="token top-token">{token}</span>'
+            for token, score in sample.get("diet_token_scores", [])[:max_display_tokens]:
+                token_class = "overlap-token" if token in overlap_tokens else "diet-token"
+                html += f'<span class="token {token_class}">{token}<span class="token-score">{score:.3f}</span></span>'
             html += """
                     </div>
                 </div>
@@ -752,10 +924,36 @@ class DiETTextExperiment:
 
         html += "</body></html>"
 
-        with open(os.path.join(viz_dir, "text_comparison.html"), "w") as f:
+        with open(os.path.join(viz_dir, "text_comparison.html"), "w", encoding="utf-8") as f:
             f.write(html)
 
         print(f"Text comparison saved to {viz_dir}")
+
+    def cleanup(self) -> None:
+        """Clean up GPU memory after experiment completion."""
+        import gc
+        
+        if self.model is not None:
+            del self.model
+            self.model = None
+        
+        if hasattr(self, 'diet_token_mask'):
+            del self.diet_token_mask
+        if self.train_input_ids is not None:
+            del self.train_input_ids
+            self.train_input_ids = None
+        if self.train_attention_mask is not None:
+            del self.train_attention_mask
+            self.train_attention_mask = None
+        if self.train_labels is not None:
+            del self.train_labels
+            self.train_labels = None
+        
+        gc.collect()
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
 
     def run_full_experiment(self, skip_training: bool = False) -> Dict[str, Any]:
         """Run complete DiET text experiment.
@@ -773,31 +971,44 @@ class DiETTextExperiment:
 
         start_time = time.time()
 
-        print("\n[Step 1/4] Preparing data...")
-        max_samples = self.config.get("max_samples", 2000)
-        self.prepare_data(max_samples)
+        try:
+            print("\n[Step 1/4] Preparing data...")
+            max_samples = self.config.get("max_samples", 2000)
+            self.prepare_data(max_samples)
 
-        if skip_training:
-            print("\n[Step 2/4] Loading baseline BERT...")
-            if not self.load_baseline():
-                print("Failed to load saved model. Training from scratch...")
+            if skip_training:
+                print("\n[Step 2/4] Loading baseline BERT...")
+                if not self.load_baseline():
+                    print("Failed to load saved model. Training from scratch...")
+                    epochs = self.config.get("epochs", 2)
+                    self.train_baseline(epochs)
+            else:
+                print("\n[Step 2/4] Training baseline BERT...")
                 epochs = self.config.get("epochs", 2)
                 self.train_baseline(epochs)
-        else:
-            print("\n[Step 2/4] Training baseline BERT...")
-            epochs = self.config.get("epochs", 2)
-            self.train_baseline(epochs)
 
-        print("\n[Step 3/4] Running DiET distillation...")
-        rounding_steps = self.config.get("rounding_steps", 2)
-        self.run_diet(rounding_steps)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
-        print("\n[Step 4/4] Comparing DiET vs IG...")
-        comparison_samples = self.config.get("comparison_samples", 10)
-        self.compare_with_ig(comparison_samples)
+            print("\n[Step 3/4] Running DiET distillation...")
+            rounding_steps = self.config.get("rounding_steps", 2)
+            self.run_diet(rounding_steps)
 
-        total_time = time.time() - start_time
-        self.results["total_time_seconds"] = total_time
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            print("\n[Step 4/4] Comparing DiET vs IG...")
+            comparison_samples = self.config.get("comparison_samples", 10)
+            top_k_values = self.config.get("top_k_values", [3, 5, 10, 15, 20])
+            self.compare_with_ig(comparison_samples, top_k_values)
+
+        except Exception as e:
+            print(f"Error during experiment: {e}")
+            self.results["error"] = str(e)
+            raise
+        finally:
+            total_time = time.time() - start_time
+            self.results["total_time_seconds"] = total_time
 
         results_path = os.path.join(self.output_dir, "diet_text_results.json")
 
