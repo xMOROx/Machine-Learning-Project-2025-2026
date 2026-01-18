@@ -464,10 +464,12 @@ class DiETTextExperiment:
         """Evaluate on validation set."""
         self.model.eval_mode()
         correct = 0
+        
+        eval_texts = self.test_texts[:100]
+        eval_labels = self.test_labels[:100]
+        num_eval = len(eval_texts)
 
-        for i, (text, label) in enumerate(
-            zip(self.test_texts[:100], self.test_labels[:100])
-        ):
+        for text, label in zip(eval_texts, eval_labels):
             input_ids, attn_mask = self.model.encode_text(text, self.max_length)
             input_ids = input_ids.to(self.device)
             attn_mask = attn_mask.to(self.device)
@@ -479,7 +481,7 @@ class DiETTextExperiment:
             if pred == label:
                 correct += 1
 
-        return 100 * correct / 100
+        return 100 * correct / num_eval
 
     def load_baseline(self, model_path: str = None) -> bool:
         """Load a previously trained baseline BERT model.
@@ -611,6 +613,7 @@ class DiETTextExperiment:
             )
             from explainers.integrated_gradients import IntegratedGradientsText
 
+        num_samples = min(num_samples, len(self.test_texts))
         ig = IntegratedGradientsText(self.model, self.device)
         diet = DiETTextExplainer(self.model, self.device, self.max_length)
 
