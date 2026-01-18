@@ -623,7 +623,7 @@ class DiETTextExperiment:
         for i in tqdm(range(num_samples), desc="Comparing methods"):
             input_ids = self.train_input_ids[i].unsqueeze(0).to(self.device)
             attention_mask = self.train_attention_mask[i].unsqueeze(0)
-            tokens = self.model.decode_tokens(input_ids[0])
+            tokens = self.model.decode_tokens(input_ids[0].cpu())
             text = " ".join(tokens) 
             label = self.train_labels[i].item()
 
@@ -634,9 +634,13 @@ class DiETTextExperiment:
                 diet_attrs = mask_values[:len(tokens)]
                 diet_tokens = tokens
 
+                # Ensure ig_attrs is on CPU and is a numpy array
+                if isinstance(ig_attrs, torch.Tensor):
+                    ig_attrs = ig_attrs.cpu().numpy()
+                
                 all_ig_attrs.append(np.abs(ig_attrs[:len(tokens)]))
                 all_diet_attrs.append(diet_attrs[:len(tokens)])
-                all_attention_masks.append(attention_mask.squeeze().numpy()[:len(tokens)])
+                all_attention_masks.append(attention_mask.squeeze().cpu().numpy()[:len(tokens)])
 
                 special_tokens = {"[PAD]", "[CLS]", "[SEP]", "[UNK]", "<pad>", "<s>", "</s>"}
             
