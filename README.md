@@ -99,7 +99,7 @@ print(df)
 ## 3. Reference Paper
 
 * **(DiET)**: Bhalla, U., et al. (2023). **"Discriminative Feature Attributions: Bridging Post Hoc Explainability and Inherent Interpretability."** *NeurIPS 2023.*
-  * [Paper PDF](<https://proceedings.neurips.cc/paper_files/paper/2023/file/5529f5f08d6d366b5c3e6f988900693b-Paper-Conference.pdf>)
+  * [Paper PDF](<https://proceedings.neurips.cc/paper_files/paper/2023/file/89beb2a345269f3f9afe48cee35403aa-Paper-Conference.pdf>)
   * [Official Repo](<https://github.com/AI4LIFE-GROUP/DiET>)
 
 ## 4. Setup & Installation
